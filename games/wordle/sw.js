@@ -1,41 +1,38 @@
-const CACHE = 'wordle-v1';
-const FILES = [
-  './',
-  'index.html',
-  'manifest.json',
-  'js_css/words.js',
-  'img/icon-192.png',
-  'img/icon-512.png',
-  'img/image.svg'
+const CACHE_NAME = "wordle-v1";
+const CACHE_ASSETS = [
+    "/",
+    "/index.html",
+    "/manifest.json",
+    "/words.js",
+    "/img/icon-192.png",
+    "/img/icon-512.png",
+    "/img/image.svg",
 ];
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
-  self.skipWaiting();
+self.addEventListener("install", (event) => {
+    self.skipWaiting();
+    event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => cache.addAll(CACHE_ASSETS))
+    );
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(k => k.startsWith('wordle-') && k !== CACHE).map(k => caches.delete(k))
-      ))
-      .then(() => self.clients.claim())
-  );
+self.addEventListener("activate", (event) => {
+    event.waitUntil(
+        Promise.all([
+            caches.keys().then(names =>
+                Promise.all(
+                    names.map(name =>
+                        name !== CACHE_NAME ? caches.delete(name) : null
+                    )
+                )
+            ),
+            self.clients.claim()
+        ])
+    );
 });
 
-// network first (always newest version while the server runs), cache as offline fallback
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    fetch(e.request)
-      .then(res => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
-        }
-        return res;
-      })
-      .catch(() => caches.match(e.request, { ignoreSearch: true }))
-  );
+self.addEventListener("fetch", (event) => {
+    event.respondWith(
+        caches.match(event.request).then((response) => response || fetch(event.request))
+    );
 });

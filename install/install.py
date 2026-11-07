@@ -5,6 +5,7 @@ import shutil
 import socketserver
 import subprocess
 import threading
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -89,7 +90,8 @@ if __name__ == "__main__":
 
     print("Running (Ctrl+C to stop)")
     try:
-        threading.Event().wait()
+        while True:
+            time.sleep(0.5)
     except KeyboardInterrupt:
         for s in servers:
             s.shutdown()
