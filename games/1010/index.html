@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <!-- <link rel="manifest" href="manifest.json"> -->
+  <meta name="theme-color" content="#0d1424">
+  <link rel="apple-touch-icon" href="img/icon-192.png">
+  <title>1010</title>
+  <style>
+    :root {
+      --bg: #0d1424;
+      --panel: #131c30;
+      --cell-bg: #1b2744;
+      --text: #e8eefc;
+      --muted: #6f84ad;
+      --board: min(calc(100vw - 24px), 52dvh);
+      --cell: calc(var(--board) / 10);
+      --pc: calc(var(--cell) * 0.6);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    /* header */
+    header {
+      flex: 0 0 auto;
+      height: clamp(120px, 15dvh, 170px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 20px 0;
+    }
+
+    #best-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 1rem;
+      font-weight: bold;
+      color: var(--muted);
+    }
+
+    #best-wrap svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    #score {
+      font-size: 3.2rem;
+      font-weight: bold;
+      line-height: 1.1;
+      margin: auto 0;
+    }
+
+    /* board */
+    main {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      flex: 0 0 auto;
+      margin-bottom: 16px;
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      grid-template-rows: repeat(10, 1fr);
+      gap: 2px;
+      width: var(--board);
+      height: var(--board);
+      padding: 4px;
+      background: var(--panel);
+      border-radius: 7px;
+    }
+
+    .cell {
+      background: var(--cell-bg);
+      border-radius: 4px;
+    }
+
+    .cell.filled { background: var(--color); }
+
+    /* tray */
+    #tray {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      align-items: center;
+      justify-items: center;
+      height: calc(var(--cell) * 3.4);
+      margin: auto 12px 16px;
+      background: var(--panel);
+      border-radius: 10px;
+    }
+
+    .piece {
+      display: grid;
+      gap: 2px;
+    }
+
+    .piece .block {
+      width: var(--pc);
+      height: var(--pc);
+      border-radius: 3px;
+      background: var(--color);
+    }
+
+    .slot {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .piece.dragging {
+      position: fixed;
+      z-index: 10;
+      pointer-events: none;
+      transition: transform 0.12s ease-out;
+    }
+
+    .cell.preview {
+      background: var(--color);
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div id="best-wrap">
+      <svg viewBox="0 0 24 24"><path d="M3 18h18v2H3zM3 7l4.5 4L12 4l4.5 7L21 7l-2 9H5z"/></svg>
+      <span id="best">0</span>
+    </div>
+    <div id="score">0</div>
+  </header>
+
+  <main>
+    <div id="board"></div>
+  </main>
+
+  <div id="tray"></div>
+
+  <script>
+    const SIZE = 10;
+    const STORAGE_PREFIX = '1010-';
+    const LIFT = 40; // px the dragged piece floats above the finger
+
+    // test pieces only (shape = 2D array, 1 = block)
+    const TEST_PIECES = [
+      { color: '#ff6b6b', shape: [[1, 0, 0], [1, 0, 0], [1, 1, 1]] },
+      { color: '#4dd0e1', shape: [[1, 1, 1, 1]] },
+      { color: '#ffd54f', shape: [[1, 1], [1, 1]] }
+    ];
+
+    const board = document.getElementById('board');
+    const tray = document.getElementById('tray');
+
+    // ---------- state ----------
+    const grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+    const cells = [];
+    const pieces = [...TEST_PIECES];   // null = already placed
+    let drag = null;
+    let previewCells = [];
+
+    // ---------- build board ----------
+    for (let i = 0; i < SIZE * SIZE; i++) {
+      const c = document.createElement('div');
+      c.className = 'cell';
+      board.appendChild(c);
+      cells.push(c);
+    }
+
+    // ---------- build tray ----------
+    function renderPiece(p, size) {
+      const el = document.createElement('div');
+      el.className = 'piece';
+      el.style.setProperty('--color', p.color);
+      if (size) el.style.setProperty('--pc', size + 'px');
+      el.style.gridTemplateColumns = `repeat(${p.shape[0].length}, auto)`;
+      p.shape.forEach(row => row.forEach(v => {
+        const b = document.createElement('div');
+        if (v) b.className = 'block';
+        else b.style.width = b.style.height = 'var(--pc)';
+        el.appendChild(b);
+      }));
+      return el;
+    }
+
+    const slots = [];
+    for (let i = 0; i < 3; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'slot';
+      slot.dataset.i = i;
+      if (pieces[i]) slot.appendChild(renderPiece(pieces[i]));
+      tray.appendChild(slot);
+      slots.push(slot);
+    }
+
+    // ---------- placement logic ----------
+    function canPlace(shape, row, col) {
+      for (let r = 0; r < shape.length; r++) {
+        for (let c = 0; c < shape[r].length; c++) {
+          if (!shape[r][c]) continue;
+          const rr = row + r, cc = col + c;
+          if (rr < 0 || rr >= SIZE || cc < 0 || cc >= SIZE) return false;
+          if (grid[rr][cc]) return false;
+        }
+      }
+      return true;
+    }
+
+    function forEachBlock(shape, row, col, fn) {
+      shape.forEach((line, r) => line.forEach((v, c) => {
+        if (v) fn(row + r, col + c);
+      }));
+    }
+
+    function clearPreview() {
+      previewCells.forEach(el => {
+        el.classList.remove('preview');
+        el.style.removeProperty('--color');
+      });
+      previewCells = [];
+    }
+
+    function showPreview(p, row, col) {
+      forEachBlock(p.shape, row, col, (r, c) => {
+        const el = cells[r * SIZE + c];
+        el.style.setProperty('--color', p.color);
+        el.classList.add('preview');
+        previewCells.push(el);
+      });
+    }
+
+    function placePiece(p, row, col) {
+      forEachBlock(p.shape, row, col, (r, c) => {
+        grid[r][c] = p.color;
+        const el = cells[r * SIZE + c];
+        el.style.setProperty('--color', p.color);
+        el.classList.add('filled');
+      });
+    }
+
+    // ---------- dragging ----------
+    function moveDrag(e) {
+      const left = e.clientX - drag.fx * drag.w;
+      const top = e.clientY - drag.fy * drag.h;
+      drag.el.style.left = left + 'px';
+      drag.el.style.top = top + 'px';
+
+      const col = Math.round((left - drag.ox) / drag.pitch);
+      const row = Math.round((top - LIFT - drag.oy) / drag.pitch);
+
+      clearPreview();
+      if (canPlace(drag.p.shape, row, col)) {
+        drag.target = { row, col };
+        showPreview(drag.p, row, col);
+      } else {
+        drag.target = null;
+      }
+    }
+
+    function endDrag(drop) {
+      if (!drag) return;
+      const slot = slots[drag.i];
+      clearPreview();
+      if (drop && drag.target) {
+        placePiece(drag.p, drag.target.row, drag.target.col);
+        pieces[drag.i] = null;
+        slot.innerHTML = '';
+      } else if (slot.firstChild) {
+        slot.firstChild.style.visibility = '';
+      }
+      drag.el.remove();
+      drag = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    }
+
+    function onMove(e) { if (drag && e.pointerId === drag.pid) moveDrag(e); }
+    function onUp(e) { if (drag && e.pointerId === drag.pid) endDrag(true); }
+    function onCancel(e) { if (drag && e.pointerId === drag.pid) endDrag(false); }
+
+    tray.addEventListener('pointerdown', e => {
+      if (drag) return;
+      const slot = e.target.closest('.slot');
+      if (!slot) return;
+      const i = Number(slot.dataset.i);
+      const p = pieces[i];
+      if (!p) return;
+      e.preventDefault();
+
+      const pr = slot.firstChild.getBoundingClientRect();
+      const fx = Math.min(1, Math.max(0, (e.clientX - pr.left) / pr.width));
+      const fy = Math.min(1, Math.max(0, (e.clientY - pr.top) / pr.height));
+
+      const r0 = cells[0].getBoundingClientRect();
+      const r1 = cells[1].getBoundingClientRect();
+      const size = r0.width;
+
+      const el = renderPiece(p, size);
+      el.classList.add('dragging');
+      document.body.appendChild(el);
+      slot.firstChild.style.visibility = 'hidden';
+
+      drag = {
+        i, p, el, pid: e.pointerId, target: null, fx, fy,
+        ox: r0.left, oy: r0.top,
+        pitch: r1.left - r0.left,
+        w: el.offsetWidth, h: el.offsetHeight
+      };
+      moveDrag(e);
+      void el.offsetWidth;
+      el.style.transform = `translateY(${-LIFT}px)`;
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
+    });
+  </script>
+  <!-- <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('SW registered'))
+        .catch(err => console.error('SW failed:', err));
+    }
+  </script> -->
+</body>
+</html>
