@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <!-- <link rel="manifest" href="manifest.json"> -->
+  <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1424">
   <link rel="apple-touch-icon" href="img/icon-192.png">
   <title>1010</title>
@@ -56,18 +56,46 @@
       padding: 12px 20px 0;
     }
 
+    #top-row {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     #best-wrap {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 1rem;
+      font-size: 1.4rem;
       font-weight: bold;
+      color: #f5c542;
+    }
+
+    #menu-btn {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 10px;
+      background: var(--panel);
       color: var(--muted);
     }
 
+    #menu-btn svg {
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
     #best-wrap svg {
-      width: 20px;
-      height: 20px;
+      width: 26px;
+      height: 26px;
       fill: currentColor;
     }
 
@@ -76,6 +104,7 @@
       font-weight: bold;
       line-height: 1.1;
       margin: auto 0;
+      color: var(--muted);
     }
 
     /* board */
@@ -85,6 +114,7 @@
       justify-content: center;
       min-height: 0;
       flex: 0 0 auto;
+      margin-top: 32px;
       margin-bottom: 16px;
     }
 
@@ -105,7 +135,15 @@
       border-radius: 4px;
     }
 
-    .cell.filled { background: var(--color); }
+    .cell { position: relative; }
+
+    .cell.filled::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: var(--color);
+    }
 
     /* tray */
     #tray {
@@ -115,7 +153,7 @@
       align-items: center;
       justify-items: center;
       height: calc(var(--cell) * 3.4);
-      margin: auto 12px 16px;
+      margin: auto 12px 40px;
       background: var(--panel);
       border-radius: 10px;
     }
@@ -151,13 +189,211 @@
       background: var(--color);
       opacity: 0.5;
     }
+
+    .cell.clearing::after {
+      animation: shrink 0.25s ease-in forwards;
+      animation-delay: var(--delay);
+    }
+
+    @keyframes shrink {
+      0%   { transform: scale(1); }
+      100% { transform: scale(0); }
+    }
+
+    #over {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(5, 8, 16, 0.75);
+      z-index: 20;
+    }
+
+    #over.show { display: flex; }
+
+    #over .box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 28px 40px;
+      background: var(--panel);
+      border-radius: 14px;
+    }
+
+    #over .label { font-size: 0.8rem; letter-spacing: 0.2em; color: var(--muted); }
+    #over .final { font-size: 2.2rem; font-weight: bold; line-height: 1.1; margin-bottom: 14px; }
+
+    #over .record {
+      display: none;
+      margin: -8px 0 14px;
+      font-size: 1rem;
+      font-weight: bold;
+      color: #ffd54f;
+    }
+
+    #over .record.show { display: block; }
+
+    #restart {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 10px;
+      background: var(--cell-bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+    }
+
+    .slot .piece {
+      transition: filter 0.2s;
+    }
+
+    .piece.dim {
+      filter: saturate(0.45) brightness(0.7);
+    }
+
+    #score.bump {
+      animation: bump 0.2s ease-out;
+    }
+
+    @keyframes bump {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    .piece.appear {
+      animation: appear 0.25s ease-out;
+    }
+
+    @keyframes appear {
+      0%   { opacity: 0; transform: scale(0.8); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    #menu {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(5, 8, 16, 0.75);
+      z-index: 20;
+    }
+
+    #menu.show { display: flex; }
+
+    #menu .box {
+      width: min(calc(100vw - 32px), 380px);
+      padding: 18px 18px 20px;
+      background: var(--panel);
+      border-radius: 14px;
+    }
+
+    #menu .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    #menu h2 {
+      font-size: 0.8rem;
+      font-weight: normal;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+    }
+
+    #menu-close {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 10px;
+      background: var(--cell-bg);
+      color: var(--muted);
+    }
+
+    #menu-close svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    #records-wrap {
+      max-height: 50dvh;
+      overflow-y: auto;
+      touch-action: pan-y;
+      overscroll-behavior: contain;
+    }
+
+    #records { width: 100%; border-collapse: collapse; }
+
+    #records th {
+      text-align: left;
+      font-size: 0.7rem;
+      font-weight: normal;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      padding: 0 8px 8px;
+    }
+
+    #records td {
+      padding: 10px 8px;
+      border-top: 1px solid var(--cell-bg);
+      font-size: 0.95rem;
+    }
+
+    #records td.s { font-weight: bold; font-size: 1.1rem; }
+    #records tr.top td.s { color: #f5c542; }
+    #records td.empty { color: var(--muted); text-align: center; padding: 24px 8px; }
+
+    #io {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    #io button {
+      flex: 1;
+      padding: 11px 0;
+      border: none;
+      border-radius: 10px;
+      background: var(--cell-bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+    }
+
+    #io-msg {
+      min-height: 1.2em;
+      margin-top: 8px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
   <header>
-    <div id="best-wrap">
-      <svg viewBox="0 0 24 24"><path d="M3 18h18v2H3zM3 7l4.5 4L12 4l4.5 7L21 7l-2 9H5z"/></svg>
-      <span id="best">0</span>
+    <div id="top-row">
+      <div id="best-wrap">
+        <svg viewBox="0 0 24 24"><path d="M3 18h18v2H3zM3 7l4.5 4L12 4l4.5 7L21 7l-2 9H5z"/></svg>
+        <span id="best">0</span>
+      </div>
+      <button id="menu-btn" type="button" aria-label="Menu">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
     </div>
     <div id="score">0</div>
   </header>
@@ -168,16 +404,64 @@
 
   <div id="tray"></div>
 
+  <div id="over">
+    <div class="box">
+      <div class="label">GAME OVER</div>
+      <div class="final" id="final">0</div>
+      <div class="record" id="record">New high score!</div>
+      <button id="restart" type="button">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <div id="menu">
+    <div class="box">
+      <div class="head">
+        <h2>HIGH SCORES</h2>
+        <button id="menu-close" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div id="records-wrap">
+        <table id="records">
+          <thead><tr><th>SCORE</th><th>DATE</th><th>TIME</th></tr></thead>
+          <tbody id="records-body"></tbody>
+        </table>
+      </div>
+      <div id="io">
+        <button id="export-btn" type="button">EXPORT</button>
+        <button id="import-btn" type="button">IMPORT</button>
+      </div>
+      <div id="io-msg"></div>
+      <input type="file" id="import-file" accept=".json,application/json" hidden>
+    </div>
+  </div>
+
   <script>
     const SIZE = 10;
     const STORAGE_PREFIX = '1010-';
-    const LIFT = 40; // px the dragged piece floats above the finger
+    const LIFT = 70; // px the dragged piece floats above the finger
 
-    // test pieces only (shape = 2D array, 1 = block)
-    const TEST_PIECES = [
-      { color: '#ff6b6b', shape: [[1, 0, 0], [1, 0, 0], [1, 1, 1]] },
-      { color: '#4dd0e1', shape: [[1, 1, 1, 1]] },
-      { color: '#ffd54f', shape: [[1, 1], [1, 1]] }
+    const rect = (h, w) => Array.from({ length: h }, () => Array(w).fill(1));
+    const PIECES = [
+      { color: '#ff6b6b', shape: rect(1, 1) },
+      { color: '#35d28a', shape: rect(1, 2) },
+      { color: '#35d28a', shape: rect(2, 1) },
+      { color: '#9b7bf2', shape: rect(1, 3) },
+      { color: '#9b7bf2', shape: rect(3, 1) },
+      { color: '#29c5e6', shape: rect(1, 4) },
+      { color: '#29c5e6', shape: rect(4, 1) },
+      { color: '#a5d65a', shape: rect(1, 5) },
+      { color: '#a5d65a', shape: rect(5, 1) },
+      { color: '#f06cc0', shape: rect(2, 2) },
+      { color: '#ff9f43', shape: rect(3, 3) },
+      { color: '#ffd54f', shape: [[1, 0], [1, 1]] },
+      { color: '#ffd54f', shape: [[0, 1], [1, 1]] },
+      { color: '#ffd54f', shape: [[1, 1], [1, 0]] },
+      { color: '#ffd54f', shape: [[1, 1], [0, 1]] },
+      { color: '#5b8cff', shape: [[1, 0, 0], [1, 0, 0], [1, 1, 1]] },
+      { color: '#5b8cff', shape: [[0, 0, 1], [0, 0, 1], [1, 1, 1]] },
+      { color: '#5b8cff', shape: [[1, 1, 1], [1, 0, 0], [1, 0, 0]] },
+      { color: '#5b8cff', shape: [[1, 1, 1], [0, 0, 1], [0, 0, 1]] }
     ];
 
     const board = document.getElementById('board');
@@ -186,9 +470,30 @@
     // ---------- state ----------
     const grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
     const cells = [];
-    const pieces = [...TEST_PIECES];   // null = already placed
+    const pieces = [null, null, null];   // null = already placed
     let drag = null;
     let previewCells = [];
+
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+    let score = 0;
+    let best = 0;
+    try { best = Number(localStorage.getItem(STORAGE_PREFIX + 'best')) || 0; } catch (e) {}
+    bestEl.textContent = best;
+    let startBest = best;   // best score at the start of the current game
+
+    function addScore(n) {
+      score += n;
+      scoreEl.textContent = score;
+      scoreEl.classList.remove('bump');
+      void scoreEl.offsetWidth;
+      scoreEl.classList.add('bump');
+      if (score > best) {
+        best = score;
+        bestEl.textContent = best;
+        try { localStorage.setItem(STORAGE_PREFIX + 'best', best); } catch (e) {}
+      }
+    }
 
     // ---------- build board ----------
     for (let i = 0; i < SIZE * SIZE; i++) {
@@ -223,6 +528,93 @@
       tray.appendChild(slot);
       slots.push(slot);
     }
+
+    // ---------- save / resume ----------
+    const SAVE_KEY = STORAGE_PREFIX + 'save';
+
+    function saveGame() {
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify({ grid, score, startBest, pieces }));
+      } catch (e) {}
+    }
+
+    function clearSave() {
+      try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+    }
+
+    function validPiece(p) {
+      return p === null || (
+        p && typeof p.color === 'string' &&
+        Array.isArray(p.shape) && p.shape.length > 0 && p.shape.length <= 5 &&
+        p.shape.every(row => Array.isArray(row) && row.length > 0 && row.length <= 5 &&
+          row.length === p.shape[0].length)
+      );
+    }
+
+    function loadGame() {
+      let s;
+      try { s = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return false; }
+      if (!s || !Array.isArray(s.grid) || s.grid.length !== SIZE) return false;
+      if (!s.grid.every(line => Array.isArray(line) && line.length === SIZE &&
+        line.every(v => v === null || typeof v === 'string'))) return false;
+      if (!Array.isArray(s.pieces) || s.pieces.length !== 3) return false;
+      if (!s.pieces.every(validPiece) || s.pieces.every(p => p === null)) return false;
+
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          grid[r][c] = s.grid[r][c];
+          if (grid[r][c]) {
+            const el = cells[r * SIZE + c];
+            el.style.setProperty('--color', grid[r][c]);
+            el.classList.add('filled');
+          }
+        }
+      }
+      score = Number(s.score) || 0;
+      scoreEl.textContent = score;
+      startBest = Number.isFinite(s.startBest) ? s.startBest : best;
+
+      for (let i = 0; i < 3; i++) {
+        pieces[i] = s.pieces[i];
+        slots[i].innerHTML = '';
+        if (pieces[i]) slots[i].appendChild(renderPiece(pieces[i]));
+      }
+      updateDim();
+      return true;
+    }
+
+    function randomPiece() {
+      return PIECES[Math.floor(Math.random() * PIECES.length)];
+    }
+
+    function fitsAnywhere(p) {
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          if (canPlace(p.shape, r, c)) return true;
+        }
+      }
+      return false;
+    }
+
+    function updateDim() {
+      slots.forEach((slot, i) => {
+        if (slot.firstChild) {
+          slot.firstChild.classList.toggle('dim', !!pieces[i] && !fitsAnywhere(pieces[i]));
+        }
+      });
+    }
+
+    function fillTray() {
+      for (let i = 0; i < 3; i++) {
+        pieces[i] = randomPiece();
+        slots[i].innerHTML = '';
+        slots[i].appendChild(renderPiece(pieces[i]));
+        slots[i].firstChild.classList.add('appear');
+      }
+      updateDim();
+    }
+
+    if (!loadGame()) fillTray();
 
     // ---------- placement logic ----------
     function canPlace(shape, row, col) {
@@ -262,12 +654,206 @@
 
     function placePiece(p, row, col) {
       forEachBlock(p.shape, row, col, (r, c) => {
+        const idx = r * SIZE + c;
         grid[r][c] = p.color;
-        const el = cells[r * SIZE + c];
+        const el = cells[idx];
+        clearTimeout(cellTimers[idx]);
+        el.classList.remove('clearing');
         el.style.setProperty('--color', p.color);
         el.classList.add('filled');
       });
     }
+
+    const STEP = 45;      // ms delay per cell of distance
+    const SHRINK = 250;   // ms, must match the CSS animation duration
+    const cellTimers = [];
+
+    function clearLines(p, row, col) {
+      const placed = [];
+      forEachBlock(p.shape, row, col, (r, c) => placed.push([r, c]));
+
+      const rows = [], cols = [];
+      for (let i = 0; i < SIZE; i++) {
+        if (grid[i].every(v => v)) rows.push(i);
+        if (grid.every(line => line[i])) cols.push(i);
+      }
+
+      // delay per cell = distance to the nearest placed block in that line
+      const dist = new Map();
+      const add = (r, c, d) => {
+        const idx = r * SIZE + c;
+        if (!dist.has(idx) || dist.get(idx) > d) dist.set(idx, d);
+      };
+      rows.forEach(r => {
+        const xs = placed.filter(b => b[0] === r).map(b => b[1]);
+        for (let c = 0; c < SIZE; c++) {
+          add(r, c, xs.length ? Math.min(...xs.map(x => Math.abs(c - x))) : 0);
+        }
+      });
+      cols.forEach(c => {
+        const ys = placed.filter(b => b[1] === c).map(b => b[0]);
+        for (let r = 0; r < SIZE; r++) {
+          add(r, c, ys.length ? Math.min(...ys.map(y => Math.abs(r - y))) : 0);
+        }
+      });
+
+      dist.forEach((d, idx) => {
+        const r = Math.floor(idx / SIZE), c = idx % SIZE;
+        const el = cells[idx];
+        grid[r][c] = null;
+        clearTimeout(cellTimers[idx]);
+        el.classList.remove('clearing');
+        void el.offsetWidth;
+        el.style.setProperty('--delay', (d * STEP) + 'ms');
+        el.classList.add('clearing');
+        cellTimers[idx] = setTimeout(() => {
+          if (grid[r][c]) return; // already re-filled by a new piece
+          el.classList.remove('filled', 'clearing');
+          el.style.removeProperty('--color');
+          el.style.removeProperty('--delay');
+        }, d * STEP + SHRINK + 20);
+      });
+
+      return rows.length + cols.length;
+    }
+
+    // ---------- game over / restart ----------
+    const overEl = document.getElementById('over');
+    let over = false;
+
+    function anyFits() {
+      return pieces.some(p => {
+        if (!p) return false;
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            if (canPlace(p.shape, r, c)) return true;
+          }
+        }
+        return false;
+      });
+    }
+
+    function checkGameOver() {
+      if (anyFits()) {
+        saveGame();
+        return;
+      }
+      over = true;
+      clearSave();
+      const isRecord = score > startBest;
+      if (isRecord) addRecord(score);
+      document.getElementById('final').textContent = 'Score: ' + score;
+      document.getElementById('record').classList.toggle('show', isRecord);
+      overEl.classList.add('show');
+    }
+
+    function restart() {
+      for (let r = 0; r < SIZE; r++) grid[r].fill(null);
+      cells.forEach((el, idx) => {
+        clearTimeout(cellTimers[idx]);
+        el.classList.remove('filled', 'clearing', 'preview');
+        el.style.removeProperty('--color');
+        el.style.removeProperty('--delay');
+      });
+      score = 0;
+      startBest = best;
+      scoreEl.textContent = 0;
+      fillTray();
+      overEl.classList.remove('show');
+      over = false;
+    }
+
+    document.getElementById('restart').addEventListener('click', restart);
+
+    // ---------- records ----------
+    const RECORDS_KEY = STORAGE_PREFIX + 'records';
+    const menuEl = document.getElementById('menu');
+    const recordsBody = document.getElementById('records-body');
+
+    function readRecords() {
+      try {
+        const r = JSON.parse(localStorage.getItem(RECORDS_KEY));
+        if (Array.isArray(r)) return r.filter(x => x && Number.isFinite(x.score) && Number.isFinite(x.t));
+      } catch (e) {}
+      return [];
+    }
+
+    function addRecord(sc) {
+      const r = readRecords();
+      r.push({ score: sc, t: Date.now() });
+      try { localStorage.setItem(RECORDS_KEY, JSON.stringify(r)); } catch (e) {}
+    }
+
+    function renderRecords() {
+      const r = readRecords().reverse();
+      recordsBody.innerHTML = '';
+      if (!r.length) {
+        recordsBody.innerHTML = '<tr><td class="empty" colspan="3">No records yet</td></tr>';
+        return;
+      }
+      r.forEach((rec, i) => {
+        const d = new Date(rec.t);
+        const tr = document.createElement('tr');
+        if (i === 0) tr.className = 'top';
+        tr.innerHTML =
+          `<td class="s">${rec.score}</td>` +
+          `<td>${d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>` +
+          `<td>${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</td>`;
+        recordsBody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('menu-btn').addEventListener('click', () => {
+      renderRecords();
+      menuEl.classList.add('show');
+    });
+    document.getElementById('menu-close').addEventListener('click', () => menuEl.classList.remove('show'));
+    menuEl.addEventListener('click', e => { if (e.target === menuEl) menuEl.classList.remove('show'); });
+
+    // ---------- export / import ----------
+    const ioMsg = document.getElementById('io-msg');
+    const importFile = document.getElementById('import-file');
+
+    function ioNote(msg) {
+      ioMsg.textContent = msg;
+      setTimeout(() => { ioMsg.textContent = ''; }, 2500);
+    }
+
+    document.getElementById('export-btn').addEventListener('click', () => {
+      const data = {};
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k.startsWith(STORAGE_PREFIX)) data[k] = localStorage.getItem(k);
+        }
+      } catch (e) {}
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '1010-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      ioNote('Exported');
+    });
+
+    document.getElementById('import-btn').addEventListener('click', () => importFile.click());
+
+    importFile.addEventListener('change', async () => {
+      const file = importFile.files[0];
+      importFile.value = '';
+      if (!file) return;
+      try {
+        const data = JSON.parse(await file.text());
+        const keys = Object.keys(data).filter(k => k.startsWith(STORAGE_PREFIX) && typeof data[k] === 'string');
+        if (!keys.length) throw new Error('empty');
+        keys.forEach(k => localStorage.setItem(k, data[k]));
+        location.reload();
+      } catch (e) {
+        ioNote('Invalid file');
+      }
+    });
 
     // ---------- dragging ----------
     function moveDrag(e) {
@@ -294,8 +880,14 @@
       clearPreview();
       if (drop && drag.target) {
         placePiece(drag.p, drag.target.row, drag.target.col);
+        const lines = clearLines(drag.p, drag.target.row, drag.target.col);
+        const cellCount = drag.p.shape.flat().filter(Boolean).length;
+        addScore(cellCount + 10 * lines * lines);
         pieces[drag.i] = null;
         slot.innerHTML = '';
+        if (pieces.every(p => !p)) fillTray();
+        updateDim();
+        checkGameOver();
       } else if (slot.firstChild) {
         slot.firstChild.style.visibility = '';
       }
@@ -311,7 +903,7 @@
     function onCancel(e) { if (drag && e.pointerId === drag.pid) endDrag(false); }
 
     tray.addEventListener('pointerdown', e => {
-      if (drag) return;
+      if (drag || over) return;
       const slot = e.target.closest('.slot');
       if (!slot) return;
       const i = Number(slot.dataset.i);
@@ -347,12 +939,12 @@
       window.addEventListener('pointercancel', onCancel);
     });
   </script>
-  <!-- <script>
+  <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
         .then(() => console.log('SW registered'))
         .catch(err => console.error('SW failed:', err));
     }
-  </script> -->
+  </script>
 </body>
 </html>
