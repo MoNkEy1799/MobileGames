@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#282c34">
+<title>Minesweeper</title>
+<style>
+  :root {
+    --bg: #282c34;
+    --panel: #21252b;
+    --tile: #5c6b86;
+    --tile-light: #7384a3;
+    --tile-dark: #435068;
+    --revealed: #232830;
+    --text: #abb2bf;
+    --muted: #7f848e;
+    --red: #ff5d6c;
+    --cell-size: 40px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%; overflow: hidden;
+    overscroll-behavior: none;
+    background: var(--bg); color: var(--text);
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    user-select: none; -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  #app {
+    height: 100dvh; display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* top bar */
+  #topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 12px 16px 0;
+  }
+  #restartBtn {
+    width: 52px; height: 52px;
+    background: var(--tile);
+    border: 4px solid;
+    border-color: var(--tile-light) var(--tile-dark) var(--tile-dark) var(--tile-light);
+    border-radius: 4px;
+  }
+  #restartBtn:active {
+    border-color: var(--tile-dark) var(--tile-light) var(--tile-light) var(--tile-dark);
+  }
+
+  .lcd {
+    display: flex; gap: 4px; padding: 6px 8px;
+    background: #14171c;
+    border: 3px solid;
+    border-color: var(--tile-dark) var(--tile-light) var(--tile-light) var(--tile-dark);
+    border-radius: 4px;
+  }
+  .lcd svg { width: 20px; height: 36px; }
+  .lcd polygon { fill: #3a2a2f; }
+  .lcd polygon.on { fill: var(--red); }
+
+  /* board area (pan/zoom comes later) */
+  #viewport {
+    flex: 1; position: relative; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    touch-action: none;
+  }
+  #board {
+    display: grid; gap: 3px; transform-origin: 0 0;
+    padding: 6px; background: var(--panel);
+    border-radius: 12px;
+  }
+  .cell {
+    position: relative;
+    width: var(--cell-size); height: var(--cell-size);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem; font-weight: 900;
+    background: var(--tile);
+    border: 4px solid;
+    border-color: var(--tile-light) var(--tile-dark) var(--tile-dark) var(--tile-light);
+    border-radius: 4px;
+  }
+  .cell.revealed {
+    background: var(--revealed);
+    border-color: transparent;
+  }
+  .cell.flagged { color: var(--red); }
+  .cell.mine { background: var(--panel); color: var(--text); }
+  .cell.boom { background: var(--red); color: var(--bg); }
+  .cell.wrong { color: var(--red); }
+
+  .n1 { color: #4da3ff; } .n2 { color: #5fd068; } .n3 { color: #ff5d6c; }
+  .n4 { color: #b07cff; } .n5 { color: #ff9f43; } .n6 { color: #2ed3c6; }
+  .n7 { color: #ffd84d; } .n8 { color: #e6e9ef; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="lcd" id="mineDisplay"></div>
+    <button id="restartBtn" type="button" aria-label="Restart"></button>
+    <div class="lcd" id="timerDisplay"></div>
+  </div>
+  <div id="viewport">
+    <div id="board"></div>
+  </div>
+</div>
+
+<script>
+  const ROWS = 9, COLS = 9, MINES = 10;   // 16/16/40 and 16/30/99 come later via the menu
+  const LONG_PRESS = 400;   // ms until a press counts as a flag
+  const MOVE_TOLERANCE = 10;   // px of movement that cancels a press
+
+  const boardEl = document.getElementById('board');
+  let cells, mine, count, open, flag, openCount, state;   // state: ready | playing | won | lost
+  let press = null;
+
+  function init() {
+    const n = ROWS * COLS;
+    mine = new Array(n).fill(false);
+    count = new Array(n).fill(0);
+    open = new Array(n).fill(false);
+    flag = new Array(n).fill(false);
+    openCount = 0;
+    state = 'ready';
+    setDisplay(mineDisplay, MINES);
+    setDisplay(timerDisplay, 0);
+    cancelPress();
+    cells = [];
+    boardEl.innerHTML = '';
+    boardEl.style.gridTemplateColumns = `repeat(${COLS}, var(--cell-size))`;
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('div');
+      c.className = 'cell';
+      c.dataset.i = i;
+      boardEl.appendChild(c);
+      cells.push(c);
+    }
+  }
+
+  function neighbors(i) {
+    const r = Math.floor(i / COLS), c = i % COLS, out = [];
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        const rr = r + dr, cc = c + dc;
+        if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS) out.push(rr * COLS + cc);
+      }
+    }
+    return out;
+  }
+
+  function placeMines(safe) {
+    const pool = [];
+    for (let i = 0; i < ROWS * COLS; i++) if (i !== safe) pool.push(i);
+    for (let k = 0; k < MINES; k++) {
+      const j = k + Math.floor(Math.random() * (pool.length - k));
+      [pool[k], pool[j]] = [pool[j], pool[k]];
+      mine[pool[k]] = true;
+    }
+    for (let i = 0; i < ROWS * COLS; i++) {
+      count[i] = neighbors(i).filter(x => mine[x]).length;
+    }
+  }
+
+  function draw(i) {
+    const el = cells[i];
+    el.className = 'cell';
+    el.textContent = '';
+    if (open[i]) {
+      el.classList.add('revealed');
+      if (count[i] > 0) {
+        el.classList.add('n' + count[i]);
+        el.textContent = count[i];
+      }
+    } else if (flag[i]) {
+      el.classList.add('flagged');
+      el.textContent = '⚑';
+    }
+  }
+
+  function reveal(i) {
+    if (state === 'won' || state === 'lost' || open[i] || flag[i]) return;
+    if (state === 'ready') {
+      placeMines(i);
+      state = 'playing';
+    }
+    if (mine[i]) { lose(i); return; }
+    const queue = [i];
+    while (queue.length) {
+      const c = queue.pop();
+      if (open[c] || flag[c]) continue;
+      open[c] = true;
+      openCount++;
+      draw(c);
+      if (count[c] === 0) neighbors(c).forEach(x => { if (!open[x]) queue.push(x); });
+    }
+    if (openCount === ROWS * COLS - MINES) win();
+  }
+
+  function chord(i) {
+    if (state !== 'playing' || !open[i] || count[i] === 0) return;
+    const nb = neighbors(i);
+    if (nb.filter(x => flag[x]).length !== count[i]) return;
+    nb.forEach(x => reveal(x));
+  }
+
+  function toggleFlag(i) {
+    if ((state !== 'ready' && state !== 'playing') || open[i]) return;
+    flag[i] = !flag[i];
+    draw(i);
+  }
+
+  function lose(hit) {
+    state = 'lost';
+    for (let i = 0; i < ROWS * COLS; i++) {
+      if (mine[i] && !flag[i]) {
+        cells[i].classList.add('revealed', 'mine');
+        cells[i].textContent = '✹';
+      } else if (flag[i] && !mine[i]) {
+        cells[i].classList.add('revealed', 'wrong');
+        cells[i].textContent = '✕';
+      }
+    }
+    cells[hit].classList.add('boom');
+  }
+
+  function win() {
+    state = 'won';
+    for (let i = 0; i < ROWS * COLS; i++) {
+      if (mine[i]) { flag[i] = true; draw(i); }
+    }
+  }
+
+  // ---------- input: tap = reveal / chord, long press = flag ----------
+  function cancelPress() {
+    if (press && press.timer) clearTimeout(press.timer);
+    press = null;
+  }
+
+  boardEl.addEventListener('pointerdown', e => {
+    const el = e.target.closest('.cell');
+    if (!el || press) return;
+    const p = { i: Number(el.dataset.i), x: e.clientX, y: e.clientY, id: e.pointerId, timer: null };
+    p.timer = setTimeout(() => {
+      p.timer = null;
+      toggleFlag(p.i);
+    }, LONG_PRESS);
+    press = p;
+  });
+
+  window.addEventListener('pointermove', e => {
+    if (!press || e.pointerId !== press.id) return;
+    if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > MOVE_TOLERANCE) cancelPress();
+  });
+
+  window.addEventListener('pointerup', e => {
+    if (!press || e.pointerId !== press.id) return;
+    const wasTap = press.timer !== null;   // timer still pending = not a long press
+    const i = press.i;
+    cancelPress();
+    if (wasTap) {
+      if (open[i]) chord(i); else reveal(i);
+    }
+  });
+
+  window.addEventListener('pointercancel', e => {
+    if (press && e.pointerId === press.id) cancelPress();
+  });
+
+  boardEl.addEventListener('contextmenu', e => e.preventDefault());
+
+  document.getElementById('restartBtn').addEventListener('click', init);
+
+  // ---------- 7-segment displays ----------
+  const SEG_POINTS = [
+    '1.5,1 2.5,0 7.5,0 8.5,1 7.5,2 2.5,2',   // a top
+    '9,2 10,3 10,7 9,8 8,7 8,3',   // b top right
+    '9,10 10,11 10,15 9,16 8,15 8,11',   // c bottom right
+    '1.5,17 2.5,16 7.5,16 8.5,17 7.5,18 2.5,18',   // d bottom
+    '1,10 2,11 2,15 1,16 0,15 0,11',   // e bottom left
+    '1,2 2,3 2,7 1,8 0,7 0,3',   // f top left
+    '1.5,9 2.5,8 7.5,8 8.5,9 7.5,10 2.5,10'   // g middle
+  ];
+  const DIGIT_SEGS = {
+    '0': 'abcdef', '1': 'bc', '2': 'abdeg', '3': 'abcdg', '4': 'bcfg',
+    '5': 'acdfg', '6': 'acdefg', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg', '-': 'g'
+  };
+  const mineDisplay = document.getElementById('mineDisplay');
+  const timerDisplay = document.getElementById('timerDisplay');
+
+  function buildDisplay(el) {
+    const digit = `<svg viewBox="0 0 10 18">${SEG_POINTS.map(p => `<polygon points="${p}"/>`).join('')}</svg>`;
+    el.innerHTML = digit + digit + digit;
+  }
+
+  function setDisplay(el, value) {
+    const v = Math.max(-99, Math.min(999, value));
+    const s = v < 0 ? '-' + String(-v).padStart(2, '0') : String(v).padStart(3, '0');
+    [...el.children].forEach((svg, d) => {
+      const on = DIGIT_SEGS[s[d]];
+      [...svg.children].forEach((poly, k) => {
+        poly.classList.toggle('on', on.includes('abcdefg'[k]));
+      });
+    });
+  }
+
+  buildDisplay(mineDisplay);
+  buildDisplay(timerDisplay);
+
+  init();
+</script>
+</body>
+</html>
