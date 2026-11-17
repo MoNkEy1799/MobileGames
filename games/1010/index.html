@@ -152,7 +152,7 @@
       grid-template-columns: repeat(3, 1fr);
       align-items: center;
       justify-items: center;
-      height: calc(var(--cell) * 3.4);
+      height: calc(var(--cell) * 4.2);
       margin: auto 12px 40px;
       background: var(--panel);
       border-radius: 10px;
@@ -439,29 +439,29 @@
   <script>
     const SIZE = 10;
     const STORAGE_PREFIX = '1010-';
-    const LIFT = 70; // px the dragged piece floats above the finger
+    const LIFT = 50; // px gap between the finger and the bottom of the dragged piece
 
     const rect = (h, w) => Array.from({ length: h }, () => Array(w).fill(1));
     const PIECES = [
-      { color: '#ff6b6b', shape: rect(1, 1) },
-      { color: '#35d28a', shape: rect(1, 2) },
-      { color: '#35d28a', shape: rect(2, 1) },
-      { color: '#9b7bf2', shape: rect(1, 3) },
-      { color: '#9b7bf2', shape: rect(3, 1) },
-      { color: '#29c5e6', shape: rect(1, 4) },
-      { color: '#29c5e6', shape: rect(4, 1) },
-      { color: '#a5d65a', shape: rect(1, 5) },
-      { color: '#a5d65a', shape: rect(5, 1) },
-      { color: '#f06cc0', shape: rect(2, 2) },
-      { color: '#ff9f43', shape: rect(3, 3) },
-      { color: '#ffd54f', shape: [[1, 0], [1, 1]] },
-      { color: '#ffd54f', shape: [[0, 1], [1, 1]] },
-      { color: '#ffd54f', shape: [[1, 1], [1, 0]] },
-      { color: '#ffd54f', shape: [[1, 1], [0, 1]] },
-      { color: '#5b8cff', shape: [[1, 0, 0], [1, 0, 0], [1, 1, 1]] },
-      { color: '#5b8cff', shape: [[0, 0, 1], [0, 0, 1], [1, 1, 1]] },
-      { color: '#5b8cff', shape: [[1, 1, 1], [1, 0, 0], [1, 0, 0]] },
-      { color: '#5b8cff', shape: [[1, 1, 1], [0, 0, 1], [0, 0, 1]] }
+      { w: 6,    color: '#2e68dd', shape: rect(1, 1) },
+      { w: 6,    color: '#ffd54f', shape: rect(1, 2) },
+      { w: 6,    color: '#ffd54f', shape: rect(2, 1) },
+      { w: 7,    color: '#ff9f43', shape: rect(1, 3) },
+      { w: 7,    color: '#ff9f43', shape: rect(3, 1) },
+      { w: 5,    color: '#f060bb', shape: rect(1, 4) },
+      { w: 5,    color: '#f060bb', shape: rect(4, 1) },
+      { w: 3,    color: '#ff5959', shape: rect(1, 5) },
+      { w: 3,    color: '#ff5959', shape: rect(5, 1) },
+      { w: 12,   color: '#8bec66', shape: rect(2, 2) },
+      { w: 5,    color: '#9d86f2', shape: rect(3, 3) },
+      { w: 5,    color: '#3bb870', shape: [[1, 0], [1, 1]] },
+      { w: 5,    color: '#3bb870', shape: [[0, 1], [1, 1]] },
+      { w: 5,    color: '#3bb870', shape: [[1, 1], [1, 0]] },
+      { w: 5,    color: '#3bb870', shape: [[1, 1], [0, 1]] },
+      { w: 3.75, color: '#63beff', shape: [[1, 0, 0], [1, 0, 0], [1, 1, 1]] },
+      { w: 3.75, color: '#63beff', shape: [[0, 0, 1], [0, 0, 1], [1, 1, 1]] },
+      { w: 3.75, color: '#63beff', shape: [[1, 1, 1], [1, 0, 0], [1, 0, 0]] },
+      { w: 3.75, color: '#63beff', shape: [[1, 1, 1], [0, 0, 1], [0, 0, 1]] }
     ];
 
     const board = document.getElementById('board');
@@ -583,8 +583,15 @@
       return true;
     }
 
+    const TOTAL_WEIGHT = PIECES.reduce((s, p) => s + p.w, 0);
+
     function randomPiece() {
-      return PIECES[Math.floor(Math.random() * PIECES.length)];
+      let x = Math.random() * TOTAL_WEIGHT;
+      for (const p of PIECES) {
+        x -= p.w;
+        if (x < 0) return p;
+      }
+      return PIECES[PIECES.length - 1];
     }
 
     function fitsAnywhere(p) {
@@ -605,8 +612,13 @@
     }
 
     function fillTray() {
+      let set;
+      for (let n = 0; n < 200; n++) {   // redraw until at least one piece fits
+        set = [randomPiece(), randomPiece(), randomPiece()];
+        if (set.some(fitsAnywhere)) break;
+      }
       for (let i = 0; i < 3; i++) {
-        pieces[i] = randomPiece();
+        pieces[i] = set[i];
         slots[i].innerHTML = '';
         slots[i].appendChild(renderPiece(pieces[i]));
         slots[i].firstChild.classList.add('appear');
@@ -857,13 +869,13 @@
 
     // ---------- dragging ----------
     function moveDrag(e) {
-      const left = e.clientX - drag.fx * drag.w;
-      const top = e.clientY - drag.fy * drag.h;
+      const left = e.clientX - drag.w / 2;
+      const top = e.clientY - drag.h - LIFT;
       drag.el.style.left = left + 'px';
       drag.el.style.top = top + 'px';
 
       const col = Math.round((left - drag.ox) / drag.pitch);
-      const row = Math.round((top - LIFT - drag.oy) / drag.pitch);
+      const row = Math.round((top - drag.oy) / drag.pitch);
 
       clearPreview();
       if (canPlace(drag.p.shape, row, col)) {
@@ -925,14 +937,16 @@
       slot.firstChild.style.visibility = 'hidden';
 
       drag = {
-        i, p, el, pid: e.pointerId, target: null, fx, fy,
+        i, p, el, pid: e.pointerId, target: null,
         ox: r0.left, oy: r0.top,
         pitch: r1.left - r0.left,
         w: el.offsetWidth, h: el.offsetHeight
       };
       moveDrag(e);
+      // start where it was grabbed, then glide to the snapped position
+      el.style.transform = `translate(${(0.5 - fx) * drag.w}px, ${(1 - fy) * drag.h + LIFT}px)`;
       void el.offsetWidth;
-      el.style.transform = `translateY(${-LIFT}px)`;
+      el.style.transform = 'translate(0, 0)';
 
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
