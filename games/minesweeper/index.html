@@ -3,16 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#282c34">
+<meta name="theme-color" content="#21252b">
 <title>Minesweeper</title>
 <style>
   :root {
-    --bg: #282c34;
+    --bg: #21252b;
     --panel: #21252b;
     --tile: #5c6b86;
     --tile-light: #7384a3;
     --tile-dark: #435068;
     --revealed: #232830;
+    --tile-face: #4b5263;
+    --tile-edge: #363c49;
+    --plane: #2c313a;
+    --grid-line: #363c49;
+    --gap: 2px;
+    --won-face: #5d7d52;
+    --won-edge: #43603a;
+    --lost-face: #92505a;
+    --lost-edge: #6f3a43;
+    --line-inset: 6px;
     --text: #abb2bf;
     --muted: #7f848e;
     --red: #ff5d6c;
@@ -38,54 +48,118 @@
     gap: 8px; padding: 12px 16px 0;
   }
   #restartBtn {
-    width: 52px; height: 52px;
-    background: var(--tile);
-    border: 4px solid;
-    border-color: var(--tile-light) var(--tile-dark) var(--tile-dark) var(--tile-light);
-    border-radius: 4px;
+    width: 52px; height: 52px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #e6e9ef;
+    background: var(--tile-face);
+    border: 0; border-radius: 6px;
+    box-shadow: inset 0 -3px 0 var(--tile-edge);
+  }
+  #restartBtn[data-state="won"] {
+    background: var(--won-face);
+    box-shadow: inset 0 -3px 0 var(--won-edge);
+  }
+  #restartBtn[data-state="lost"] {
+    background: var(--lost-face);
+    box-shadow: inset 0 -3px 0 var(--lost-edge);
   }
   #restartBtn:active {
-    border-color: var(--tile-dark) var(--tile-light) var(--tile-light) var(--tile-dark);
+    transform: translateY(2px);
+    box-shadow: none;
   }
+  #restartBtn svg {
+    display: none; width: 28px; height: 28px;
+  }
+  #restartBtn svg * {
+    fill: currentColor; stroke: currentColor;
+    stroke-width: 1.5; stroke-linejoin: round;
+  }
+  #restartBtn .ico-mine path {
+    fill: none; stroke-width: 2.2; stroke-linecap: round;
+  }
+  #restartBtn[data-state="playing"] .ico-play,
+  #restartBtn[data-state="won"] .ico-star,
+  #restartBtn[data-state="lost"] .ico-mine { display: block; }
+
+  #bottombar { display: flex; justify-content: center; padding: 8px 16px 12px; }
+  #menuBtn {
+    width: 52px; height: 52px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #e6e9ef; background: var(--tile-face);
+    border: 0; border-radius: 6px;
+    box-shadow: inset 0 -3px 0 var(--tile-edge);
+  }
+  #menuBtn:active { transform: translateY(2px); box-shadow: none; }
+  #menuBtn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+
+  #menu {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  #menu[hidden] { display: none; }
+  .sheet {
+    width: min(320px, calc(100% - 32px)); padding: 16px;
+    background: var(--plane); border-radius: 12px;
+  }
+  .sheet-title { margin-bottom: 12px; font-size: 0.8rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+  .diff, .sheet-close {
+    display: flex; justify-content: space-between; align-items: center;
+    width: 100%; margin-bottom: 8px; padding: 14px 16px;
+    font: inherit; font-weight: 900; font-size: 1.1rem;
+    color: #e6e9ef; background: var(--tile-face);
+    border: 0; border-radius: 6px;
+    box-shadow: inset 0 -3px 0 var(--tile-edge);
+  }
+  .diff span { font-size: 0.8rem; font-weight: normal; color: var(--muted); }
+  .diff.active { box-shadow: inset 0 -3px 0 var(--tile-edge), inset 0 0 0 2px #61afef; }
+  .diff:active, .sheet-close:active { transform: translateY(2px); box-shadow: none; }
+  .sheet-close { justify-content: center; margin: 4px 0 0; background: transparent; box-shadow: none; color: var(--muted); }
 
   .lcd {
-    display: flex; gap: 4px; padding: 6px 8px;
-    background: #14171c;
-    border: 3px solid;
-    border-color: var(--tile-dark) var(--tile-light) var(--tile-light) var(--tile-dark);
-    border-radius: 4px;
+    display: flex; gap: 5px; padding: 12px 8px;
+    background: var(--plane);
+    border-radius: 6px;
   }
-  .lcd svg { width: 20px; height: 36px; }
-  .lcd polygon { fill: #3a2a2f; }
-  .lcd polygon.on { fill: var(--red); }
+  .lcd svg { width: 26px; height: 40px; }
+  .lcd rect { fill: #353b47; }
+  .lcd rect.on { fill: var(--red); }
 
   /* board area (pan/zoom comes later) */
   #viewport {
     flex: 1; position: relative; overflow: hidden;
-    display: flex; align-items: center; justify-content: center;
     touch-action: none;
   }
   #board {
-    display: grid; gap: 3px; transform-origin: 0 0;
-    padding: 6px; background: var(--panel);
+    position: absolute; top: 0; left: 0;
+    display: grid; gap: var(--gap); transform-origin: 0 0;
+    padding: 6px; background: var(--plane);
     border-radius: 12px;
   }
   .cell {
-    position: relative;
+    position: relative; z-index: 1;
     width: var(--cell-size); height: var(--cell-size);
     display: flex; align-items: center; justify-content: center;
     font-size: 1.6rem; font-weight: 900;
-    background: var(--tile);
-    border: 4px solid;
-    border-color: var(--tile-light) var(--tile-dark) var(--tile-dark) var(--tile-light);
-    border-radius: 4px;
+    background: var(--tile-face);
+    border-radius: 6px;
+    box-shadow: inset 0 -3px 0 var(--tile-edge);
   }
-  .cell.revealed {
-    background: var(--revealed);
-    border-color: transparent;
+  .cell.revealed { background: transparent; box-shadow: none; }
+  .cell.lr::before, .cell.lb::after {
+    content: ''; position: absolute; pointer-events: none;
+    background: var(--grid-line);
+  }
+  .cell.lr::before {
+    left: calc(100% + var(--gap) / 2 - 0.5px); top: var(--line-inset);
+    width: 1px; height: calc(100% - 2 * var(--line-inset));
+  }
+  .cell.lb::after {
+    top: calc(100% + var(--gap) / 2 - 0.5px); left: var(--line-inset);
+    width: calc(100% - 2 * var(--line-inset)); height: 1px;
   }
   .cell.flagged { color: var(--red); }
-  .cell.mine { background: var(--panel); color: var(--text); }
+  .cell.mine { background: transparent; color: var(--text); box-shadow: none; }
   .cell.boom { background: var(--red); color: var(--bg); }
   .cell.wrong { color: var(--red); }
 
@@ -98,20 +172,47 @@
 <div id="app">
   <div id="topbar">
     <div class="lcd" id="mineDisplay"></div>
-    <button id="restartBtn" type="button" aria-label="Restart"></button>
+    <button id="restartBtn" type="button" aria-label="Restart" data-state="playing">
+      <svg class="ico-play" viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19"/></svg>
+      <svg class="ico-star" viewBox="0 0 24 24"><polygon points="12,3 14.6,9 21,9.5 16,13.8 17.6,20.2 12,16.8 6.4,20.2 8,13.8 3,9.5 9.4,9"/></svg>
+      <svg class="ico-mine" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.5"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>
+    </button>
     <div class="lcd" id="timerDisplay"></div>
   </div>
   <div id="viewport">
     <div id="board"></div>
   </div>
+  <div id="bottombar">
+    <button id="menuBtn" type="button" aria-label="Menu">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="menu" hidden>
+  <div class="sheet">
+    <div class="sheet-title">Difficulty</div>
+    <button class="diff" type="button" data-diff="easy">Easy <span>9 x 9, 10 mines</span></button>
+    <button class="diff" type="button" data-diff="medium">Medium <span>16 x 16, 40 mines</span></button>
+    <button class="diff" type="button" data-diff="hard">Hard <span>16 x 30, 99 mines</span></button>
+    <button class="sheet-close" type="button" id="menuClose">Close</button>
+  </div>
 </div>
 
 <script>
-  const ROWS = 9, COLS = 9, MINES = 10;   // 16/16/40 and 16/30/99 come later via the menu
+  const DIFFS = {
+    easy: { rows: 9, cols: 9, mines: 10 },
+    medium: { rows: 16, cols: 16, mines: 40 },
+    hard: { rows: 30, cols: 16, mines: 99 }   // 30 rows tall, 16 columns wide
+  };
+  let currentDiff = 'easy';
+  let ROWS = DIFFS.easy.rows, COLS = DIFFS.easy.cols, MINES = DIFFS.easy.mines;
   const LONG_PRESS = 400;   // ms until a press counts as a flag
   const MOVE_TOLERANCE = 10;   // px of movement that cancels a press
 
   const boardEl = document.getElementById('board');
+  const restartBtn = document.getElementById('restartBtn');
+  let timerId = null, startTime = 0;
   let cells, mine, count, open, flag, openCount, state;   // state: ready | playing | won | lost
   let press = null;
 
@@ -123,6 +224,8 @@
     flag = new Array(n).fill(false);
     openCount = 0;
     state = 'ready';
+    restartBtn.dataset.state = 'playing';
+    stopTimer();
     setDisplay(mineDisplay, MINES);
     setDisplay(timerDisplay, 0);
     cancelPress();
@@ -136,6 +239,7 @@
       boardEl.appendChild(c);
       cells.push(c);
     }
+    fitView();
   }
 
   function neighbors(i) {
@@ -163,8 +267,15 @@
     }
   }
 
+  function updateLines(i) {
+    const r = Math.floor(i / COLS), c = i % COLS;
+    cells[i].classList.toggle('lr', open[i] && c < COLS - 1 && open[i + 1]);
+    cells[i].classList.toggle('lb', open[i] && r < ROWS - 1 && open[i + COLS]);
+  }
+
   function draw(i) {
     const el = cells[i];
+    const r = Math.floor(i / COLS), c = i % COLS;
     el.className = 'cell';
     el.textContent = '';
     if (open[i]) {
@@ -177,6 +288,9 @@
       el.classList.add('flagged');
       el.textContent = '⚑';
     }
+    updateLines(i);
+    if (c > 0) updateLines(i - 1);   // the left neighbor's right line depends on this cell
+    if (r > 0) updateLines(i - COLS);   // the top neighbor's bottom line depends on this cell
   }
 
   function reveal(i) {
@@ -184,6 +298,7 @@
     if (state === 'ready') {
       placeMines(i);
       state = 'playing';
+      startTimer();
     }
     if (mine[i]) { lose(i); return; }
     const queue = [i];
@@ -209,10 +324,13 @@
     if ((state !== 'ready' && state !== 'playing') || open[i]) return;
     flag[i] = !flag[i];
     draw(i);
+    updateMineCounter();
   }
 
   function lose(hit) {
     state = 'lost';
+    restartBtn.dataset.state = 'lost';
+    stopTimer();
     for (let i = 0; i < ROWS * COLS; i++) {
       if (mine[i] && !flag[i]) {
         cells[i].classList.add('revealed', 'mine');
@@ -227,60 +345,194 @@
 
   function win() {
     state = 'won';
+    restartBtn.dataset.state = 'won';
+    stopTimer();
     for (let i = 0; i < ROWS * COLS; i++) {
       if (mine[i]) { flag[i] = true; draw(i); }
     }
+    updateMineCounter();
   }
 
-  // ---------- input: tap = reveal / chord, long press = flag ----------
+  // ---------- input: tap = reveal / chord, long press = flag, drag = pan, pinch = zoom ----------
+  const viewportEl = document.getElementById('viewport');
+  const MAX_SCALE = 3;
+  const EDGE_MARGIN = 24;   // px the board may be pulled past the screen edge
+  const view = { s: 1, x: 0, y: 0 };
+  let fitScale = 1;
+  const pointers = new Map();
+  let gesture = null;   // { type: 'pan' | 'pinch', ... }
+  let moved = false;   // true once a touch became a pan or pinch, so it can't count as a tap
+
+  function applyView() {
+    const bw = boardEl.offsetWidth * view.s, bh = boardEl.offsetHeight * view.s;
+    const vw = viewportEl.clientWidth, vh = viewportEl.clientHeight;
+    view.x = bw <= vw ? (vw - bw) / 2 : Math.min(EDGE_MARGIN, Math.max(vw - bw - EDGE_MARGIN, view.x));
+    view.y = bh <= vh ? (vh - bh) / 2 : Math.min(EDGE_MARGIN, Math.max(vh - bh - EDGE_MARGIN, view.y));
+    boardEl.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`;
+  }
+
+  function computeFit() {
+    fitScale = Math.min(1, viewportEl.clientWidth / boardEl.offsetWidth, viewportEl.clientHeight / boardEl.offsetHeight);
+  }
+
+  function fitView() {
+    computeFit();
+    view.s = fitScale;
+    applyView();
+  }
+
+  function zoomAt(cx, cy, newScale) {
+    const s = Math.min(MAX_SCALE, Math.max(fitScale, newScale));
+    const wx = (cx - view.x) / view.s, wy = (cy - view.y) / view.s;
+    view.s = s;
+    view.x = cx - wx * s;
+    view.y = cy - wy * s;
+    applyView();
+  }
+
+  function startPan(p) {
+    gesture = { type: 'pan', id: p.id, sx: p.x, sy: p.y, vx: view.x, vy: view.y };
+  }
+
+  function startPinch() {
+    const [a, b] = [...pointers.values()];
+    const box = viewportEl.getBoundingClientRect();
+    const cx = (a.x + b.x) / 2 - box.left, cy = (a.y + b.y) / 2 - box.top;
+    gesture = {
+      type: 'pinch', s0: view.s, d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+      wx: (cx - view.x) / view.s, wy: (cy - view.y) / view.s
+    };
+  }
+
+  function pinchTo() {
+    const [a, b] = [...pointers.values()];
+    const box = viewportEl.getBoundingClientRect();
+    const cx = (a.x + b.x) / 2 - box.left, cy = (a.y + b.y) / 2 - box.top;
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    view.s = Math.min(MAX_SCALE, Math.max(fitScale, gesture.s0 * d / gesture.d0));
+    view.x = cx - gesture.wx * view.s;
+    view.y = cy - gesture.wy * view.s;
+    applyView();
+  }
+
   function cancelPress() {
     if (press && press.timer) clearTimeout(press.timer);
     press = null;
   }
 
-  boardEl.addEventListener('pointerdown', e => {
-    const el = e.target.closest('.cell');
-    if (!el || press) return;
-    const p = { i: Number(el.dataset.i), x: e.clientX, y: e.clientY, id: e.pointerId, timer: null };
-    p.timer = setTimeout(() => {
-      p.timer = null;
-      toggleFlag(p.i);
-    }, LONG_PRESS);
-    press = p;
-  });
-
-  window.addEventListener('pointermove', e => {
-    if (!press || e.pointerId !== press.id) return;
-    if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > MOVE_TOLERANCE) cancelPress();
-  });
-
-  window.addEventListener('pointerup', e => {
-    if (!press || e.pointerId !== press.id) return;
-    const wasTap = press.timer !== null;   // timer still pending = not a long press
-    const i = press.i;
-    cancelPress();
-    if (wasTap) {
-      if (open[i]) chord(i); else reveal(i);
+  viewportEl.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (pointers.size >= 2) return;
+    pointers.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      moved = false;
+      startPan(pointers.get(e.pointerId));
+      const el = e.target.closest('.cell');
+      if (el) {
+        const p = { i: Number(el.dataset.i), id: e.pointerId, timer: null };
+        p.timer = setTimeout(() => {
+          p.timer = null;
+          toggleFlag(p.i);
+        }, LONG_PRESS);
+        press = p;
+      }
+    } else {
+      cancelPress();
+      moved = true;
+      startPinch();
     }
   });
 
-  window.addEventListener('pointercancel', e => {
-    if (press && e.pointerId === press.id) cancelPress();
+  window.addEventListener('pointermove', e => {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    p.x = e.clientX;
+    p.y = e.clientY;
+    if (!gesture) return;
+    if (gesture.type === 'pinch') {
+      if (pointers.size === 2) pinchTo();
+      return;
+    }
+    if (e.pointerId !== gesture.id) return;
+    if (!moved) {
+      if (Math.hypot(p.x - gesture.sx, p.y - gesture.sy) <= MOVE_TOLERANCE) return;
+      moved = true;
+      cancelPress();
+      gesture.sx = p.x;   // start panning from here, so the board doesn't jump
+      gesture.sy = p.y;
+    }
+    view.x = gesture.vx + (p.x - gesture.sx);
+    view.y = gesture.vy + (p.y - gesture.sy);
+    applyView();
+  });
+
+  function release(e, allowTap) {
+    if (!pointers.has(e.pointerId)) return;
+    const tapOk = allowTap && !moved && press && press.id === e.pointerId && press.timer !== null;
+    const i = tapOk ? press.i : -1;
+    pointers.delete(e.pointerId);
+    cancelPress();
+    if (pointers.size === 0) gesture = null;
+    else startPan([...pointers.values()][0]);   // one finger left after a pinch: keep panning with it
+    if (i >= 0) {
+      if (open[i]) chord(i); else reveal(i);
+    }
+  }
+
+  window.addEventListener('pointerup', e => release(e, true));
+  window.addEventListener('pointercancel', e => release(e, false));
+
+  // mouse wheel zoom, for testing on the PC
+  viewportEl.addEventListener('wheel', e => {
+    e.preventDefault();
+    const box = viewportEl.getBoundingClientRect();
+    zoomAt(e.clientX - box.left, e.clientY - box.top, view.s * Math.exp(-e.deltaY * 0.002));
+  }, { passive: false });
+
+  window.addEventListener('resize', () => {
+    computeFit();
+    view.s = Math.max(view.s, fitScale);
+    applyView();
   });
 
   boardEl.addEventListener('contextmenu', e => e.preventDefault());
 
   document.getElementById('restartBtn').addEventListener('click', init);
 
+  // ---------- timer and mine counter ----------
+  function elapsedSeconds() {
+    return Math.floor((Date.now() - startTime) / 1000);
+  }
+
+  function tick() {
+    setDisplay(timerDisplay, elapsedSeconds());
+  }
+
+  function startTimer() {
+    startTime = Date.now();
+    timerId = setInterval(tick, 250);
+  }
+
+  function stopTimer() {
+    if (timerId === null) return;
+    clearInterval(timerId);
+    timerId = null;
+    tick();
+  }
+
+  function updateMineCounter() {
+    setDisplay(mineDisplay, MINES - flag.filter(Boolean).length);
+  }
+
   // ---------- 7-segment displays ----------
-  const SEG_POINTS = [
-    '1.5,1 2.5,0 7.5,0 8.5,1 7.5,2 2.5,2',   // a top
-    '9,2 10,3 10,7 9,8 8,7 8,3',   // b top right
-    '9,10 10,11 10,15 9,16 8,15 8,11',   // c bottom right
-    '1.5,17 2.5,16 7.5,16 8.5,17 7.5,18 2.5,18',   // d bottom
-    '1,10 2,11 2,15 1,16 0,15 0,11',   // e bottom left
-    '1,2 2,3 2,7 1,8 0,7 0,3',   // f top left
-    '1.5,9 2.5,8 7.5,8 8.5,9 7.5,10 2.5,10'   // g middle
+  const SEG_RECTS = [
+    [6.5, 0, 13, 5],   // a top
+    [21, 4, 5, 14.5],   // b top right
+    [21, 21.5, 5, 14.5],   // c bottom right
+    [6.5, 35, 13, 5],   // d bottom
+    [0, 21.5, 5, 14.5],   // e bottom left
+    [0, 4, 5, 14.5],   // f top left
+    [6.5, 17.5, 13, 5]   // g middle
   ];
   const DIGIT_SEGS = {
     '0': 'abcdef', '1': 'bc', '2': 'abdeg', '3': 'abcdg', '4': 'bcfg',
@@ -290,7 +542,7 @@
   const timerDisplay = document.getElementById('timerDisplay');
 
   function buildDisplay(el) {
-    const digit = `<svg viewBox="0 0 10 18">${SEG_POINTS.map(p => `<polygon points="${p}"/>`).join('')}</svg>`;
+    const digit = `<svg viewBox="0 0 26 40">${SEG_RECTS.map(r => `<rect x="${r[0]}" y="${r[1]}" width="${r[2]}" height="${r[3]}" rx="2.5"/>`).join('')}</svg>`;
     el.innerHTML = digit + digit + digit;
   }
 
@@ -307,6 +559,36 @@
 
   buildDisplay(mineDisplay);
   buildDisplay(timerDisplay);
+
+  // ---------- menu: difficulty ----------
+  const menuEl = document.getElementById('menu');
+
+  function setDifficulty(key) {
+    currentDiff = key;
+    ROWS = DIFFS[key].rows;
+    COLS = DIFFS[key].cols;
+    MINES = DIFFS[key].mines;
+    init();
+  }
+
+  function openMenu() {
+    menuEl.querySelectorAll('.diff').forEach(b => b.classList.toggle('active', b.dataset.diff === currentDiff));
+    menuEl.hidden = false;
+  }
+
+  function closeMenu() {
+    menuEl.hidden = true;
+  }
+
+  document.getElementById('menuBtn').addEventListener('click', openMenu);
+  document.getElementById('menuClose').addEventListener('click', closeMenu);
+  menuEl.addEventListener('click', e => { if (e.target === menuEl) closeMenu(); });
+  menuEl.querySelectorAll('.diff').forEach(b => {
+    b.addEventListener('click', () => {
+      setDifficulty(b.dataset.diff);
+      closeMenu();
+    });
+  });
 
   init();
 </script>
