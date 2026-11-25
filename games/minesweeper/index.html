@@ -4,15 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#21252b">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="img/icon-192.png">
 <title>Minesweeper</title>
 <style>
   :root {
     --bg: #21252b;
-    --panel: #21252b;
-    --tile: #5c6b86;
-    --tile-light: #7384a3;
-    --tile-dark: #435068;
-    --revealed: #232830;
     --tile-face: #4b5263;
     --tile-edge: #363c49;
     --plane: #2c313a;
@@ -77,20 +74,32 @@
   #restartBtn .ico-mine path {
     fill: none; stroke-width: 2.2; stroke-linecap: round;
   }
-  #restartBtn[data-state="playing"] .ico-play,
+  #restartBtn .ico-tiles * { stroke: none; }
+  #restartBtn[data-state="playing"] .ico-tiles,
   #restartBtn[data-state="won"] .ico-star,
   #restartBtn[data-state="lost"] .ico-mine { display: block; }
 
-  #bottombar { display: flex; justify-content: center; padding: 8px 16px 12px; }
-  #menuBtn {
+  #bottombar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px 12px;
+  }
+  .bar-btn {
     width: 52px; height: 52px; padding: 0;
     display: flex; align-items: center; justify-content: center;
     color: #e6e9ef; background: var(--tile-face);
     border: 0; border-radius: 6px;
     box-shadow: inset 0 -3px 0 var(--tile-edge);
   }
-  #menuBtn:active { transform: translateY(2px); box-shadow: none; }
-  #menuBtn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+  .bar-btn:active { transform: translateY(2px); box-shadow: none; }
+  .bar-btn svg {
+    width: 26px; height: 26px; fill: none; stroke: currentColor;
+    stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
+  }
+  #modeBtn.on { color: var(--red); }
+  #modeBtn .ico-flag { display: none; }
+  #modeBtn.on .ico-reveal { display: none; }
+  #modeBtn.on .ico-flag { display: block; }
+  #modeBtn .flag-cloth { fill: currentColor; }
 
   #menu {
     position: fixed; inset: 0; z-index: 10;
@@ -101,20 +110,71 @@
   .sheet {
     width: min(320px, calc(100% - 32px)); padding: 16px;
     background: var(--plane); border-radius: 12px;
+    max-height: calc(100dvh - 32px); overflow-y: auto;
   }
   .sheet-title { margin-bottom: 12px; font-size: 0.8rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
-  .diff, .sheet-close {
+  .diff {
     display: flex; justify-content: space-between; align-items: center;
-    width: 100%; margin-bottom: 8px; padding: 14px 16px;
+    width: 100%; margin-bottom: 8px; padding: 12px 14px;
     font: inherit; font-weight: 900; font-size: 1.1rem;
-    color: #e6e9ef; background: var(--tile-face);
-    border: 0; border-radius: 6px;
-    box-shadow: inset 0 -3px 0 var(--tile-edge);
+    color: #e6e9ef; background: transparent;
+    border: 2px solid var(--tile-edge); border-radius: 6px;
   }
+  .sheet-title.sub {
+    margin-top: 18px;
+    font-size: 1rem; font-weight: 900; letter-spacing: 0.15em; color: #e6e9ef;
+  }
+  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tab {
+    flex: 1; padding: 8px 0;
+    font: inherit; font-size: 0.85rem; font-weight: 900;
+    color: var(--muted); background: transparent;
+    border: 2px solid var(--tile-edge); border-radius: 6px;
+  }
+  .tab.active { color: #e6e9ef; background: var(--tile-face); border-color: var(--tile-face); }
+  #bestList { margin: 0 0 8px; padding: 0; list-style: none; }
+  #bestList li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; border-radius: 6px; color: #e6e9ef;
+  }
+  #bestList li:nth-child(odd) { background: rgba(255, 255, 255, 0.03); }
+  #bestList .rank { width: 22px; font-size: 0.85rem; color: var(--muted); }
+  #bestList .time { font-size: 1.05rem; font-weight: 900; }
+  #bestList .date { margin-left: auto; font-size: 0.8rem; color: var(--muted); }
+  #bestList li.new { background: rgba(97, 175, 239, 0.18); }
+  #bestList li.new .time { color: #61afef; }
+  #bestList li.empty { justify-content: center; color: var(--muted); }
   .diff span { font-size: 0.8rem; font-weight: normal; color: var(--muted); }
-  .diff.active { box-shadow: inset 0 -3px 0 var(--tile-edge), inset 0 0 0 2px #61afef; }
-  .diff:active, .sheet-close:active { transform: translateY(2px); box-shadow: none; }
-  .sheet-close { justify-content: center; margin: 4px 0 0; background: transparent; box-shadow: none; color: var(--muted); }
+  .diff.active { background: rgba(97, 175, 239, 0.18); border-color: #61afef; }
+  .diff.active span { color: #61afef; }
+  .diff:active { transform: translateY(1px); }
+
+  .sheet { position: relative; }
+  .sheet-head { min-height: 40px; }
+  .sheet-head .sheet-title {
+    margin: 0; line-height: 24px;   /* same height as the switch, so both are vertically centered */
+    font-size: 1rem; font-weight: 900; letter-spacing: 0.15em; color: #e6e9ef;
+  }
+  .mode-row {
+    position: absolute; top: 16px; right: 16px;
+    display: flex; flex-direction: row-reverse; align-items: center; gap: 8px;
+  }
+  .switch {
+    position: relative; width: 44px; height: 24px; padding: 0;
+    border: 0; border-radius: 12px;
+    background: var(--tile-edge);
+    transition: background 0.2s;
+  }
+  .switch .knob {
+    position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #e6e9ef;
+    transition: transform 0.2s;
+  }
+  .switch.on { background: #ff9f43; }
+  .switch.on .knob { transform: translateX(20px); }
+  .switch-label { font-size: 0.75rem; text-align: center; white-space: nowrap; color: var(--muted); }
+  .switch.on + .switch-label { color: #ff9f43; }
 
   .lcd {
     display: flex; gap: 5px; padding: 12px 8px;
@@ -125,9 +185,12 @@
   .lcd rect { fill: #353b47; }
   .lcd rect.on { fill: var(--red); }
 
-  /* board area (pan/zoom comes later) */
+  /* board area */
   #viewport {
     flex: 1; position: relative; overflow: hidden;
+    margin: 10px 12px;
+    border: 2px solid var(--tile-edge);
+    border-radius: 12px;
     touch-action: none;
   }
   #board {
@@ -146,6 +209,11 @@
     box-shadow: inset 0 -3px 0 var(--tile-edge);
   }
   .cell.revealed { background: transparent; box-shadow: none; }
+  .cell.pressed { background: var(--tile-edge); box-shadow: none; }
+  .cell.start {   /* marked start cell of a no-guess board */
+    background: #d9883b;
+    box-shadow: inset 0 -3px 0 #a8692f;
+  }
   .cell.lr::before, .cell.lb::after {
     content: ''; position: absolute; pointer-events: none;
     background: var(--grid-line);
@@ -160,8 +228,34 @@
   }
   .cell.flagged { color: var(--red); }
   .cell.mine { background: transparent; color: var(--text); box-shadow: none; }
-  .cell.boom { background: var(--red); color: var(--bg); }
+  .cell.boom { background: var(--red); color: var(--bg); animation: boom 0.3s ease-out; }
   .cell.wrong { color: var(--red); }
+  .cell.pop { animation: reveal 0.22s ease-out backwards; animation-delay: var(--delay, 0ms); }
+  .cell.pop::before, .cell.pop::after { animation: fade-in 0.22s linear backwards; animation-delay: var(--delay, 0ms); }
+  .cell.flagpop { animation: flagpop 0.18s ease-out; }
+  .cell.wave { animation: wave 0.3s ease-in-out; animation-delay: var(--delay, 0ms); }
+
+  @keyframes reveal {
+    0% { background-color: var(--tile-face); box-shadow: inset 0 -3px 0 var(--tile-edge); color: transparent; transform: scale(1); }
+    40% { transform: scale(0.85); }
+    100% { transform: scale(1); }
+  }
+  @keyframes fade-in { from { opacity: 0; } }
+  @keyframes boom {
+    0% { background-color: #fff; transform: scale(1); }
+    30% { transform: scale(1.35); }
+    100% { transform: scale(1); }
+  }
+  @keyframes flagpop {
+    0% { transform: scale(0.85); }
+    55% { transform: scale(1.12); }
+    100% { transform: scale(1); }
+  }
+  @keyframes wave {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.18); }
+    100% { transform: scale(1); }
+  }
 
   .n1 { color: #4da3ff; } .n2 { color: #5fd068; } .n3 { color: #ff5d6c; }
   .n4 { color: #b07cff; } .n5 { color: #ff9f43; } .n6 { color: #2ed3c6; }
@@ -173,7 +267,7 @@
   <div id="topbar">
     <div class="lcd" id="mineDisplay"></div>
     <button id="restartBtn" type="button" aria-label="Restart" data-state="playing">
-      <svg class="ico-play" viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19"/></svg>
+      <svg class="ico-tiles" viewBox="0 0 24 24"><rect x="2" y="2" width="9" height="9" rx="2.2"/><rect x="13" y="2" width="9" height="9" rx="2.2" fill-opacity="0.35"/><rect x="2" y="13" width="9" height="9" rx="2.2" fill-opacity="0.35"/><rect x="13" y="13" width="9" height="9" rx="2.2"/></svg>
       <svg class="ico-star" viewBox="0 0 24 24"><polygon points="12,3 14.6,9 21,9.5 16,13.8 17.6,20.2 12,16.8 6.4,20.2 8,13.8 3,9.5 9.4,9"/></svg>
       <svg class="ico-mine" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.5"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>
     </button>
@@ -183,22 +277,42 @@
     <div id="board"></div>
   </div>
   <div id="bottombar">
-    <button id="menuBtn" type="button" aria-label="Menu">
+    <button class="bar-btn" id="menuBtn" type="button" aria-label="Menu">
       <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <button class="bar-btn" id="fitBtn" type="button" aria-label="Fit board to screen">
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>
+    </button>
+    <button class="bar-btn" id="modeBtn" type="button" aria-label="Flag mode" aria-pressed="false">
+      <svg class="ico-reveal" viewBox="0 0 26 26"><circle cx="13" cy="13" r="6"/><path d="M13 2v5M13 19v5M2 13h5M19 13h5"/></svg>
+      <svg class="ico-flag" viewBox="0 0 24 24"><path d="M6 21V4"/><path class="flag-cloth" d="M6 4h12l-3.5 4.5L18 13H6z"/></svg>
     </button>
   </div>
 </div>
 
 <div id="menu" hidden>
   <div class="sheet">
-    <div class="sheet-title">Difficulty</div>
+    <div class="sheet-head">
+      <div class="sheet-title">Difficulty</div>
+      <div class="mode-row">
+        <button class="switch" id="noGuessSwitch" type="button" role="switch" aria-checked="false" aria-label="No guess boards"><span class="knob"></span></button>
+        <div class="switch-label" id="noGuessLabel">Normal</div>
+      </div>
+    </div>
     <button class="diff" type="button" data-diff="easy">Easy <span>9 x 9, 10 mines</span></button>
     <button class="diff" type="button" data-diff="medium">Medium <span>16 x 16, 40 mines</span></button>
     <button class="diff" type="button" data-diff="hard">Hard <span>16 x 30, 99 mines</span></button>
-    <button class="sheet-close" type="button" id="menuClose">Close</button>
+    <div class="sheet-title sub">Best times</div>
+    <div class="tabs">
+      <button class="tab" type="button" data-diff="easy">Easy</button>
+      <button class="tab" type="button" data-diff="medium">Medium</button>
+      <button class="tab" type="button" data-diff="hard">Hard</button>
+    </div>
+    <ol id="bestList"></ol>
   </div>
 </div>
 
+<script src="solver.js"></script>
 <script>
   const DIFFS = {
     easy: { rows: 9, cols: 9, mines: 10 },
@@ -212,9 +326,17 @@
 
   const boardEl = document.getElementById('board');
   const restartBtn = document.getElementById('restartBtn');
-  let timerId = null, startTime = 0;
+  let timerId = null, startTime = 0, frozenMs = 0, hitCell = -1, pausedAt = 0;
+  let gameId = 0, popEnd = 0;
   let cells, mine, count, open, flag, openCount, state;   // state: ready | playing | won | lost
   let press = null;
+  let pressedCells = [];   // neighbors shown pressed down while a number is held
+  let flagMode = false;   // false: tap = reveal, long press = flag. true: the other way round
+  const NOGUESS_KEY = 'mines-noguess';
+  let noGuess = false;   // switch setting, used from the next game on
+  try { noGuess = localStorage.getItem(NOGUESS_KEY) === '1'; } catch (e) {}
+  let gameNoGuess = false;   // mode of the game currently on the board
+  let startCell = -1;   // marked start cell of a no-guess board, -1 = none
 
   function init() {
     const n = ROWS * COLS;
@@ -224,8 +346,14 @@
     flag = new Array(n).fill(false);
     openCount = 0;
     state = 'ready';
+    gameNoGuess = noGuess;
+    gameId++;
+    lastRecord = null;
     restartBtn.dataset.state = 'playing';
     stopTimer();
+    frozenMs = 0;
+    hitCell = -1;
+    pausedAt = 0;
     setDisplay(mineDisplay, MINES);
     setDisplay(timerDisplay, 0);
     cancelPress();
@@ -239,7 +367,16 @@
       boardEl.appendChild(c);
       cells.push(c);
     }
+    startCell = -1;
+    if (gameNoGuess) {
+      const g = mineGenerate(ROWS, COLS, MINES);
+      g.mine.forEach((v, i) => { mine[i] = v; });
+      for (let i = 0; i < n; i++) count[i] = neighbors(i).filter(x => mine[x]).length;
+      startCell = g.start;
+      draw(startCell);
+    }
     fitView();
+    saveGame();
   }
 
   function neighbors(i) {
@@ -287,6 +424,8 @@
     } else if (flag[i]) {
       el.classList.add('flagged');
       el.textContent = '⚑';
+    } else if (i === startCell && (state === 'ready' || state === 'playing')) {
+      el.classList.add('start');
     }
     updateLines(i);
     if (c > 0) updateLines(i - 1);   // the left neighbor's right line depends on this cell
@@ -296,18 +435,20 @@
   function reveal(i) {
     if (state === 'won' || state === 'lost' || open[i] || flag[i]) return;
     if (state === 'ready') {
-      placeMines(i);
+      if (!gameNoGuess) placeMines(i);   // no-guess boards already have their mines
       state = 'playing';
       startTimer();
     }
     if (mine[i]) { lose(i); return; }
     const queue = [i];
+    const r0 = Math.floor(i / COLS), c0 = i % COLS;
     while (queue.length) {
       const c = queue.pop();
       if (open[c] || flag[c]) continue;
       open[c] = true;
       openCount++;
       draw(c);
+      popCell(c, Math.min(Math.hypot(Math.floor(c / COLS) - r0, (c % COLS) - c0) * 30, 400));
       if (count[c] === 0) neighbors(c).forEach(x => { if (!open[x]) queue.push(x); });
     }
     if (openCount === ROWS * COLS - MINES) win();
@@ -324,50 +465,85 @@
     if ((state !== 'ready' && state !== 'playing') || open[i]) return;
     flag[i] = !flag[i];
     draw(i);
+    if (flag[i]) cells[i].classList.add('flagpop');
     updateMineCounter();
   }
 
-  function lose(hit) {
-    state = 'lost';
-    restartBtn.dataset.state = 'lost';
-    stopTimer();
+  function popCell(i, delay) {
+    const el = cells[i];
+    el.style.setProperty('--delay', delay + 'ms');
+    el.classList.add('pop');
+    popEnd = Math.max(popEnd, Date.now() + delay + 220);
+  }
+
+  function showLoss(hit, animate) {
+    const hr = Math.floor(hit / COLS), hc = hit % COLS;
     for (let i = 0; i < ROWS * COLS; i++) {
-      if (mine[i] && !flag[i]) {
-        cells[i].classList.add('revealed', 'mine');
-        cells[i].textContent = '✹';
-      } else if (flag[i] && !mine[i]) {
-        cells[i].classList.add('revealed', 'wrong');
-        cells[i].textContent = '✕';
+      const wrongFlag = flag[i] && !mine[i];
+      if ((mine[i] && !flag[i]) || wrongFlag) {
+        cells[i].classList.add('revealed', wrongFlag ? 'wrong' : 'mine');
+        cells[i].textContent = wrongFlag ? '✕' : '✹';
+        if (animate && i !== hit) {
+          const dist = Math.hypot(Math.floor(i / COLS) - hr, (i % COLS) - hc);
+          popCell(i, 120 + Math.min(dist * 22, 300));
+        }
       }
     }
     cells[hit].classList.add('boom');
   }
 
+  function lose(hit) {
+    state = 'lost';
+    hitCell = hit;
+    restartBtn.dataset.state = 'lost';
+    stopTimer();
+    if (startCell >= 0) cells[startCell].classList.remove('start');
+    showLoss(hit, true);
+  }
+
+  function winWave() {
+    const g = gameId;
+    setTimeout(() => {
+      if (g !== gameId || state !== 'won') return;
+      for (let i = 0; i < ROWS * COLS; i++) {
+        const r = Math.floor(i / COLS), c = i % COLS;
+        cells[i].style.setProperty('--delay', Math.min((r + c) * 18, 450) + 'ms');
+        cells[i].classList.add('wave');
+      }
+    }, Math.max(0, popEnd - Date.now()));   // wait for the reveal ripple to finish
+  }
+
   function win() {
     state = 'won';
     restartBtn.dataset.state = 'won';
+    addBest(elapsedSeconds());
     stopTimer();
     for (let i = 0; i < ROWS * COLS; i++) {
       if (mine[i]) { flag[i] = true; draw(i); }
     }
     updateMineCounter();
+    winWave();
   }
 
   // ---------- input: tap = reveal / chord, long press = flag, drag = pan, pinch = zoom ----------
   const viewportEl = document.getElementById('viewport');
   const MAX_SCALE = 3;
-  const EDGE_MARGIN = 24;   // px the board may be pulled past the screen edge
   const view = { s: 1, x: 0, y: 0 };
   let fitScale = 1;
   const pointers = new Map();
   let gesture = null;   // { type: 'pan' | 'pinch', ... }
   let moved = false;   // true once a touch became a pan or pinch, so it can't count as a tap
+  const FRICTION = 0.93;   // share of the slide speed kept per 16ms (higher = longer slide)
+  let inertia = null;   // animation frame of the slide after a pan
+  let samples = [];   // recent finger positions, to measure the speed on release
 
   function applyView() {
     const bw = boardEl.offsetWidth * view.s, bh = boardEl.offsetHeight * view.s;
     const vw = viewportEl.clientWidth, vh = viewportEl.clientHeight;
-    view.x = bw <= vw ? (vw - bw) / 2 : Math.min(EDGE_MARGIN, Math.max(vw - bw - EDGE_MARGIN, view.x));
-    view.y = bh <= vh ? (vh - bh) / 2 : Math.min(EDGE_MARGIN, Math.max(vh - bh - EDGE_MARGIN, view.y));
+    // smaller than the bezel: centered. Larger: the board edges stop at the bezel.
+    // The 0.5px tolerance avoids rounding errors when the board fits exactly (this broke centering on Medium).
+    view.x = bw <= vw + 0.5 ? (vw - bw) / 2 : Math.min(0, Math.max(vw - bw, view.x));
+    view.y = bh <= vh + 0.5 ? (vh - bh) / 2 : Math.min(0, Math.max(vh - bh, view.y));
     boardEl.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`;
   }
 
@@ -375,13 +551,46 @@
     fitScale = Math.min(1, viewportEl.clientWidth / boardEl.offsetWidth, viewportEl.clientHeight / boardEl.offsetHeight);
   }
 
+  function stopInertia() {
+    if (inertia) cancelAnimationFrame(inertia);
+    inertia = null;
+  }
+
+  function startInertia() {
+    const now = performance.now();
+    const recent = samples.filter(s => now - s.t < 100);
+    if (recent.length < 2) return;   // finger was held still before letting go
+    const a = recent[0], b = recent[recent.length - 1];
+    if (b.t - a.t <= 0) return;
+    let vx = (b.x - a.x) / (b.t - a.t), vy = (b.y - a.y) / (b.t - a.t);   // px per ms
+    let last = now;
+    const step = t => {
+      const d = Math.min(t - last, 50);
+      last = t;
+      const ex = view.x + vx * d, ey = view.y + vy * d;
+      view.x = ex;
+      view.y = ey;
+      applyView();
+      if (Math.abs(view.x - ex) > 0.01) vx = 0;   // hit the bezel: stop in that direction
+      if (Math.abs(view.y - ey) > 0.01) vy = 0;
+      const f = Math.pow(FRICTION, d / 16);
+      vx *= f;
+      vy *= f;
+      if (Math.hypot(vx, vy) < 0.02) { inertia = null; return; }
+      inertia = requestAnimationFrame(step);
+    };
+    inertia = requestAnimationFrame(step);
+  }
+
   function fitView() {
+    stopInertia();
     computeFit();
     view.s = fitScale;
     applyView();
   }
 
   function zoomAt(cx, cy, newScale) {
+    stopInertia();
     const s = Math.min(MAX_SCALE, Math.max(fitScale, newScale));
     const wx = (cx - view.x) / view.s, wy = (cy - view.y) / view.s;
     view.s = s;
@@ -392,6 +601,7 @@
 
   function startPan(p) {
     gesture = { type: 'pan', id: p.id, sx: p.x, sy: p.y, vx: view.x, vy: view.y };
+    samples = [];
   }
 
   function startPinch() {
@@ -415,14 +625,27 @@
     applyView();
   }
 
+  function pressNeighbors(i) {
+    clearPressed();
+    pressedCells = neighbors(i).filter(x => !open[x] && !flag[x]);
+    pressedCells.forEach(x => cells[x].classList.add('pressed'));
+  }
+
+  function clearPressed() {
+    pressedCells.forEach(x => { if (cells[x]) cells[x].classList.remove('pressed'); });
+    pressedCells = [];
+  }
+
   function cancelPress() {
     if (press && press.timer) clearTimeout(press.timer);
     press = null;
+    clearPressed();
   }
 
   viewportEl.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (pointers.size >= 2) return;
+    stopInertia();   // touching the board catches a sliding board
     pointers.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY });
     if (pointers.size === 1) {
       moved = false;
@@ -432,9 +655,11 @@
         const p = { i: Number(el.dataset.i), id: e.pointerId, timer: null };
         p.timer = setTimeout(() => {
           p.timer = null;
-          toggleFlag(p.i);
+          if (flagMode) reveal(p.i); else toggleFlag(p.i);
+          saveGame();
         }, LONG_PRESS);
         press = p;
+        if (state === 'playing' && open[p.i] && count[p.i] > 0) pressNeighbors(p.i);
       }
     } else {
       cancelPress();
@@ -464,18 +689,28 @@
     view.x = gesture.vx + (p.x - gesture.sx);
     view.y = gesture.vy + (p.y - gesture.sy);
     applyView();
+    const now = performance.now();
+    samples.push({ t: now, x: p.x, y: p.y });
+    while (samples.length && now - samples[0].t > 100) samples.shift();
   });
 
   function release(e, allowTap) {
     if (!pointers.has(e.pointerId)) return;
     const tapOk = allowTap && !moved && press && press.id === e.pointerId && press.timer !== null;
     const i = tapOk ? press.i : -1;
+    const wasPan = allowTap && moved && gesture && gesture.type === 'pan' && gesture.id === e.pointerId;
     pointers.delete(e.pointerId);
     cancelPress();
-    if (pointers.size === 0) gesture = null;
+    if (pointers.size === 0) {
+      gesture = null;
+      if (wasPan) startInertia();
+    }
     else startPan([...pointers.values()][0]);   // one finger left after a pinch: keep panning with it
     if (i >= 0) {
-      if (open[i]) chord(i); else reveal(i);
+      if (open[i]) chord(i);
+      else if (flagMode) toggleFlag(i);
+      else reveal(i);
+      saveGame();
     }
   }
 
@@ -496,6 +731,10 @@
   });
 
   boardEl.addEventListener('contextmenu', e => e.preventDefault());
+  boardEl.addEventListener('animationend', e => {
+    if (e.pseudoElement) return;
+    e.target.classList.remove('pop', 'flagpop', 'wave');
+  });
 
   document.getElementById('restartBtn').addEventListener('click', init);
 
@@ -508,13 +747,14 @@
     setDisplay(timerDisplay, elapsedSeconds());
   }
 
-  function startTimer() {
-    startTime = Date.now();
+  function startTimer(offsetMs = 0) {
+    startTime = Date.now() - offsetMs;
     timerId = setInterval(tick, 250);
   }
 
   function stopTimer() {
     if (timerId === null) return;
+    frozenMs = Date.now() - startTime;
     clearInterval(timerId);
     timerId = null;
     tick();
@@ -573,6 +813,8 @@
 
   function openMenu() {
     menuEl.querySelectorAll('.diff').forEach(b => b.classList.toggle('active', b.dataset.diff === currentDiff));
+    bestTab = currentDiff;
+    renderBest();
     menuEl.hidden = false;
   }
 
@@ -580,8 +822,31 @@
     menuEl.hidden = true;
   }
 
+  const noGuessSwitch = document.getElementById('noGuessSwitch');
+
+  function renderSwitch() {
+    noGuessSwitch.classList.toggle('on', noGuess);
+    noGuessSwitch.setAttribute('aria-checked', noGuess);
+    document.getElementById('noGuessLabel').textContent = noGuess ? 'No guess' : 'Normal';
+  }
+
+  noGuessSwitch.addEventListener('click', () => {
+    noGuess = !noGuess;
+    try { localStorage.setItem(NOGUESS_KEY, noGuess ? '1' : '0'); } catch (e) {}
+    renderSwitch();
+    renderBest();   // show the best times of the selected mode
+  });
+  renderSwitch();
+
+  document.getElementById('fitBtn').addEventListener('click', fitView);
+
+  const modeBtn = document.getElementById('modeBtn');
+  modeBtn.addEventListener('click', () => {
+    flagMode = !flagMode;
+    modeBtn.classList.toggle('on', flagMode);
+    modeBtn.setAttribute('aria-pressed', flagMode);
+  });
   document.getElementById('menuBtn').addEventListener('click', openMenu);
-  document.getElementById('menuClose').addEventListener('click', closeMenu);
   menuEl.addEventListener('click', e => { if (e.target === menuEl) closeMenu(); });
   menuEl.querySelectorAll('.diff').forEach(b => {
     b.addEventListener('click', () => {
@@ -590,7 +855,153 @@
     });
   });
 
-  init();
+  // ---------- best times ----------
+  const BEST_KEY = 'mines-best';   // normal boards
+  const BEST_KEY_NG = 'mines-best-noguess';   // no-guess boards
+  const MAX_BEST = 10;
+  let bestTab = 'easy';
+  let lastRecord = null;   // the win just recorded, highlighted in the list
+
+  function loadBest(ng) {
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(ng ? BEST_KEY_NG : BEST_KEY)); } catch (e) {}
+    const out = {};
+    Object.keys(DIFFS).forEach(key => {
+      const list = data && Array.isArray(data[key]) ? data[key] : [];
+      out[key] = list
+        .filter(x => x && Number.isFinite(x.t) && x.t >= 0 && Number.isFinite(x.d))
+        .sort((a, b) => a.t - b.t || a.d - b.d)
+        .slice(0, MAX_BEST);
+    });
+    return out;
+  }
+
+  function addBest(secs) {
+    const all = loadBest(gameNoGuess);
+    const entry = { t: secs, d: Date.now() };
+    all[currentDiff].push(entry);
+    all[currentDiff].sort((a, b) => a.t - b.t || a.d - b.d);
+    all[currentDiff] = all[currentDiff].slice(0, MAX_BEST);
+    try { localStorage.setItem(gameNoGuess ? BEST_KEY_NG : BEST_KEY, JSON.stringify(all)); } catch (e) {}
+    lastRecord = all[currentDiff].includes(entry) ? { diff: currentDiff, ng: gameNoGuess, d: entry.d } : null;
+  }
+
+  function renderBest() {
+    menuEl.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.diff === bestTab));
+    const list = loadBest(noGuess)[bestTab];   // the list follows the switch
+    const ol = document.getElementById('bestList');
+    ol.innerHTML = '';
+    if (!list.length) {
+      ol.innerHTML = '<li class="empty">No times yet</li>';
+      return;
+    }
+    list.forEach((e, i) => {
+      const li = document.createElement('li');
+      if (lastRecord && lastRecord.diff === bestTab && lastRecord.ng === noGuess && lastRecord.d === e.d) li.className = 'new';
+      const date = new Date(e.d).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit' });
+      li.innerHTML = `<span class="rank">${i + 1}.</span><span class="time">${e.t}s</span><span class="date">${date}</span>`;
+      ol.appendChild(li);
+    });
+  }
+
+  menuEl.querySelectorAll('.tab').forEach(b => {
+    b.addEventListener('click', () => {
+      bestTab = b.dataset.diff;
+      renderBest();
+    });
+  });
+
+  // ---------- save / resume ----------
+  const SAVE_KEY = 'mines-state';
+
+  function elapsedMs() {
+    if (state !== 'playing') return frozenMs;
+    return (pausedAt || Date.now()) - startTime;
+  }
+
+  function saveGame() {
+    const list = a => {
+      const out = [];
+      a.forEach((v, i) => { if (v) out.push(i); });
+      return out;
+    };
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({
+        diff: currentDiff, noGuess: gameNoGuess, start: startCell, state, hit: hitCell, elapsed: elapsedMs(),
+        mine: list(mine), open: list(open), flag: list(flag)
+      }));
+    } catch (e) {}
+  }
+
+  function loadGame() {
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return false; }
+    if (!s || !DIFFS[s.diff] || !['ready', 'playing', 'won', 'lost'].includes(s.state)) return false;
+    const d = DIFFS[s.diff], n = d.rows * d.cols;
+    const idx = a => Array.isArray(a) && new Set(a).size === a.length && a.every(v => Number.isInteger(v) && v >= 0 && v < n);
+    if (!idx(s.mine) || !idx(s.open) || !idx(s.flag)) return false;
+    if (s.mine.length !== (s.state === 'ready' && !s.noGuess ? 0 : d.mines)) return false;
+    if (s.state === 'ready' && s.open.length) return false;
+    if (s.open.some(i => s.mine.includes(i) || s.flag.includes(i))) return false;
+    if (s.state === 'won' && s.open.length !== n - d.mines) return false;
+    if (!Number.isInteger(s.hit) || s.hit < -1 || s.hit >= n) return false;
+    if (s.state === 'lost' ? !s.mine.includes(s.hit) : s.hit !== -1) return false;
+    if (!Number.isFinite(s.elapsed) || s.elapsed < 0 || s.elapsed > 1e9) return false;
+    if (s.noGuess !== undefined && typeof s.noGuess !== 'boolean') return false;
+    const start = s.start === undefined ? -1 : s.start;
+    if (s.noGuess ? !(Number.isInteger(start) && start >= 0 && start < n && !s.mine.includes(start)) : start !== -1) return false;
+
+    currentDiff = s.diff;
+    ROWS = d.rows;
+    COLS = d.cols;
+    MINES = d.mines;
+    init();   // builds a fresh board, the saved data is applied below
+    gameNoGuess = s.noGuess === true;
+    startCell = start;
+    mine.fill(false);   // init may have generated a board, the saved one replaces it
+    s.mine.forEach(i => { mine[i] = true; });
+    if (s.mine.length) {
+      for (let i = 0; i < n; i++) count[i] = neighbors(i).filter(x => mine[x]).length;
+    }
+    s.open.forEach(i => { open[i] = true; });
+    s.flag.forEach(i => { flag[i] = true; });
+    openCount = s.open.length;
+    state = s.state;
+    hitCell = s.hit;
+    for (let i = 0; i < n; i++) draw(i);
+    if (state === 'lost') showLoss(hitCell);
+    restartBtn.dataset.state = state === 'won' || state === 'lost' ? state : 'playing';
+    updateMineCounter();
+    frozenMs = state === 'playing' ? 0 : s.elapsed;
+    setDisplay(timerDisplay, Math.floor(s.elapsed / 1000));
+    if (state === 'playing') startTimer(s.elapsed);
+    saveGame();
+    return true;
+  }
+
+  // pause the timer while the page is hidden or closed
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (state === 'playing' && timerId !== null) {
+        pausedAt = Date.now();
+        clearInterval(timerId);
+        timerId = null;
+      }
+      saveGame();
+    } else if (pausedAt) {
+      startTime += Date.now() - pausedAt;
+      pausedAt = 0;
+      timerId = setInterval(tick, 250);
+    }
+  });
+  window.addEventListener('pagehide', saveGame);
+
+  if (!loadGame()) init();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
 </script>
 </body>
 </html>
