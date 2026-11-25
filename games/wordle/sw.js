@@ -1,4 +1,4 @@
-const CACHE_NAME = "wordle-v5";
+const CACHE_NAME = "wordle-v6";
 const CACHE_ASSETS = [
     "/",
     "/index.html",

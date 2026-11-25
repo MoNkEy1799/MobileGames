@@ -143,7 +143,7 @@
 
     /* ---------- keyboard ---------- */
     #keyboard {
-      padding: 8px 6px 12px;
+      padding: 8px 6px 36px;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -357,8 +357,6 @@
     const hardBtn = document.getElementById('hard-btn');
     const keyButtons = {};
     document.querySelectorAll('#keyboard button').forEach(b => keyButtons[b.dataset.key] = b);
-
-    document.addEventListener('touchstart', () => {}, { passive: true }); // enables :active on iOS
 
     // ---------- state ----------
     let answer, row, current, cursor, gameOver, busy, guesses;
