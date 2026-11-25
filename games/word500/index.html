@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#16161d">
+  <link rel="apple-touch-icon" href="img/icon-192.png">
+  <title>Word500</title>
+  <style>
+    :root {
+      --bg: #16161d;
+      --surface: #22222c;
+      --border: #3a3a48;
+      --key: #4a4a5a;
+      --text: #f2f2f7;
+      --dim: #8a8a9c;
+      --green: #3fa45b;
+      --yellow: #e2a72e;
+      --red: #d6453d;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    }
+
+    /* ---------- header ---------- */
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+
+    h1 span { color: var(--yellow); }
+
+    #hard-btn {
+      justify-self: start;
+      padding: 6px 12px;
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.75rem;
+      font-weight: bold;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+    }
+
+    #hard-btn.active {
+      border-color: var(--yellow);
+      color: var(--yellow);
+    }
+
+    #restart-btn {
+      justify-self: end;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    #restart-btn svg {
+      width: 26px;
+      height: 26px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ---------- board ---------- */
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      position: relative;
+    }
+
+    #board {
+      display: grid;
+      grid-template-rows: repeat(8, 1fr);
+      gap: 5px;
+      padding: 8px;
+      height: 100%;
+      max-height: 560px;
+      aspect-ratio: 7.4 / 8;
+      max-width: 100%;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr) 4px repeat(3, 0.62fr);
+      gap: 4px;
+      min-height: 0;
+    }
+
+    .tile {
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      min-height: 0;
+    }
+
+    .tile.filled   { border-color: #5c5c70; background: var(--surface); }
+    .tile.selected { border-color: var(--text); }
+
+    .count {
+      align-self: center;
+      aspect-ratio: 1;
+      width: 100%;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      font-weight: bold;
+    }
+
+    .count.green  { color: var(--green); }
+    .count.yellow { color: var(--yellow); }
+    .count.red    { color: var(--red); }
+
+    .count.shown        { color: var(--bg); animation: count-in 0.3s ease-out both; }
+    .count.green.shown  { background: var(--green);  border-color: var(--green); }
+    .count.yellow.shown { background: var(--yellow); border-color: var(--yellow); }
+    .count.red.shown    { background: var(--red);    border-color: var(--red); }
+
+    @keyframes count-in {
+      0%   { transform: scale(0.3); opacity: 0; }
+      70%  { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+
+    .tile.done { border-color: var(--surface); background: var(--surface); transition: background 0.15s, border-color 0.15s; }
+
+    .tile.done.m-red    { background: var(--red);    border-color: var(--red); }
+    .tile.done.m-yellow { background: var(--yellow); border-color: var(--yellow); }
+    .tile.done.m-green  { background: var(--green);  border-color: var(--green); }
+
+    .kb-row button.m-red    { background: var(--red); }
+    .kb-row button.m-yellow { background: var(--yellow); }
+    .kb-row button.m-green  { background: var(--green); }
+
+    .row.lock .tile { animation: lock 0.35s ease-in-out both; }
+    @keyframes lock {
+      0%   { transform: translateY(0); }
+      40%  { transform: translateY(-5px); }
+      100% { transform: translateY(0); }
+    }
+
+    /* ---------- keyboard ---------- */
+    #keyboard {
+      padding: 8px 6px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .kb-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .kb-row button {
+      flex: 1;
+      height: 56px;
+      border: none;
+      border-radius: 4px;
+      background: var(--key);
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .kb-row button.wide { flex: 1.5; font-size: 0.75rem; }
+    .kb-row .spacer { flex: 0.5; }
+
+    .kb-row button.off {
+      background: var(--surface);
+      color: #4a4a58;
+    }
+
+    .kb-row button.pressed {
+      transform: scale(0.92);
+      filter: brightness(1.5);
+    }
+
+    /* ---------- animations ---------- */
+    .tile.pop { animation: pop 0.12s ease-out; }
+    @keyframes pop {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.12); }
+      100% { transform: scale(1); }
+    }
+
+    .row.shake { animation: shake 0.3s; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%      { transform: translateX(-4px); }
+      40%      { transform: translateX(4px); }
+      60%      { transform: translateX(-3px); }
+      80%      { transform: translateX(3px); }
+    }
+
+    /* ---------- toast ---------- */
+    #toast {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translate(-50%, -6px);
+      background: var(--text);
+      color: var(--bg);
+      padding: 10px 16px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 10;
+    }
+
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  </style>
+</head>
+<body>
+  <header>
+    <button id="hard-btn" type="button">HARD</button>
+    <h1>WORD<span>500</span></h1>
+    <button id="restart-btn" type="button" aria-label="New game">
+      <svg viewBox="0 0 24 24">
+        <path d="M20 12a8 8 0 1 1-2.34-5.66"/>
+        <polyline points="20 3 20 8 15 8"/>
+      </svg>
+    </button>
+  </header>
+
+  <main>
+    <div id="toast"></div>
+    <div id="board"></div>
+  </main>
+
+  <div id="keyboard">
+    <div class="kb-row">
+      <button data-key="q">Q</button><button data-key="w">W</button><button data-key="e">E</button><button data-key="r">R</button><button data-key="t">T</button><button data-key="y">Y</button><button data-key="u">U</button><button data-key="i">I</button><button data-key="o">O</button><button data-key="p">P</button>
+    </div>
+    <div class="kb-row">
+      <div class="spacer"></div>
+      <button data-key="a">A</button><button data-key="s">S</button><button data-key="d">D</button><button data-key="f">F</button><button data-key="g">G</button><button data-key="h">H</button><button data-key="j">J</button><button data-key="k">K</button><button data-key="l">L</button>
+      <div class="spacer"></div>
+    </div>
+    <div class="kb-row">
+      <button data-key="enter" class="wide">ENTER</button>
+      <button data-key="z">Z</button><button data-key="x">X</button><button data-key="c">C</button><button data-key="v">V</button><button data-key="b">B</button><button data-key="n">N</button><button data-key="m">M</button>
+      <button data-key="backspace" class="wide">⌫</button>
+    </div>
+  </div>
+
+  <script src="words.js"></script>
+  <script>
+    // ---------- constants & elements ----------
+    const COLS = 5, ROWS = 8;
+    const TILE_STEP = 60;     // delay between tiles in the lock animation (ms)
+    const COUNT_STEP = 180;   // delay between the three count circles (ms)
+    const REVEAL_END = 350 + (COLS - 1) * TILE_STEP + 2 * COUNT_STEP + 300;
+    const board = document.getElementById('board');
+
+    // ---------- build board ----------
+    for (let r = 0; r < ROWS; r++) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      for (let i = 0; i < COLS; i++) {
+        const t = document.createElement('div');
+        t.className = 'tile';
+        row.appendChild(t);
+      }
+      row.appendChild(document.createElement('div'));
+      ['green', 'yellow', 'red'].forEach(c => {
+        const b = document.createElement('div');
+        b.className = 'count ' + c;
+        row.appendChild(b);
+      });
+      board.appendChild(row);
+    }
+
+    const BLOCKED = ['j', 'q', 'x', 'z'];
+    BLOCKED.forEach(l => document.querySelector(`#keyboard button[data-key="${l}"]`).classList.add('off'));
+
+    const rows = board.children;
+    const toast = document.getElementById('toast');
+
+    // ---------- state ----------
+    let answer = ANSWERS[Math.floor(Math.random() * ANSWERS.length)];
+    let guesses = [];
+    let marks = {};          // letter -> 'red' | 'yellow' | 'green'
+    let row = 0;
+    let current = ["", "", "", "", ""];
+    let cursor = 0;
+    let gameOver = false;
+    let busy = false;
+    let toastTimer;
+
+    // ---------- helpers ----------
+    function tilesOf(r) {
+      return [...rows[r].children].slice(0, COLS);
+    }
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+    }
+
+    function renderRow() {
+      document.querySelectorAll('.tile.selected').forEach(t => t.classList.remove('selected'));
+      if (gameOver) return;
+      const tiles = tilesOf(row);
+      for (let i = 0; i < COLS; i++) {
+        tiles[i].textContent = current[i];
+        tiles[i].classList.toggle('filled', !!current[i]);
+      }
+      tiles[cursor].classList.add('selected');
+    }
+
+    function shakeRow() {
+      const r = rows[row];
+      r.classList.remove('shake');
+      void r.offsetWidth;
+      r.classList.add('shake');
+      setTimeout(() => r.classList.remove('shake'), 300);
+    }
+
+    function popTile(tile) {
+      tile.classList.remove('pop');
+      tile.style.animationDelay = '';
+      void tile.offsetWidth;
+      tile.classList.add('pop');
+      tile.addEventListener('animationend', () => tile.classList.remove('pop'), { once: true });
+    }
+
+    function countsOf(r) {
+      return [...rows[r].children].slice(COLS + 1);
+    }
+
+    // ---------- scoring ----------
+    function score(guess) {
+      let green = 0, common = 0;
+      const left = {};
+      for (const l of answer) left[l] = (left[l] || 0) + 1;
+      for (let i = 0; i < COLS; i++) {
+        if (guess[i] === answer[i]) green++;
+        if (left[guess[i]] > 0) { common++; left[guess[i]]--; }
+      }
+      return [green, common - green, COLS - common];
+    }
+
+    function showCounts(r, result, animate) {
+      countsOf(r).forEach((c, i) => {
+        c.textContent = result[i];
+        c.style.animationDelay = animate ? (350 + (COLS - 1) * TILE_STEP + i * COUNT_STEP) + 'ms' : '';
+        c.classList.add('shown');
+      });
+    }
+
+    // ---------- marking ----------
+    const MARK_CYCLE = [undefined, 'red', 'yellow', 'green'];
+    const MARK_CLASSES = ['m-red', 'm-yellow', 'm-green'];
+
+    function renderMarks() {
+      document.querySelectorAll('.tile.done').forEach(t => {
+        t.classList.remove(...MARK_CLASSES);
+        const m = marks[t.textContent];
+        if (m) t.classList.add('m-' + m);
+      });
+      document.querySelectorAll('#keyboard button').forEach(b => {
+        b.classList.remove(...MARK_CLASSES);
+        const m = marks[b.dataset.key];
+        if (m) b.classList.add('m-' + m);
+      });
+    }
+
+    function cycleMark(letter) {
+      const next = MARK_CYCLE[(MARK_CYCLE.indexOf(marks[letter]) + 1) % MARK_CYCLE.length];
+      if (next) marks[letter] = next;
+      else delete marks[letter];
+      renderMarks();
+    }
+
+    // ---------- game flow ----------
+    function submit() {
+      if (current.some(c => !c)) {
+        shakeRow();
+        showToast("Not enough letters");
+        return;
+      }
+      const guess = current.join("");
+
+      if (!VALID_GUESSES.has(guess)) {
+        shakeRow();
+        showToast("Not in word list");
+        return;
+      }
+
+      const result = score(guess);
+      guesses.push({ word: guess, result });
+
+      const r = rows[row];
+      tilesOf(row).forEach((t, i) => {
+        t.classList.add('done');
+        t.style.animationDelay = (i * TILE_STEP) + 'ms';
+      });
+      r.classList.add('lock');
+      showCounts(row, result, true);
+      renderMarks();
+
+      busy = true;
+      setTimeout(() => {
+        r.classList.remove('lock');
+        busy = false;
+      }, REVEAL_END);
+
+      if (guess === answer || row === ROWS - 1) {
+        gameOver = true;
+        // end popup follows in step 6
+        setTimeout(() => showToast(answer.toUpperCase()), REVEAL_END);
+      } else {
+        row++;
+        current = ["", "", "", "", ""];
+        cursor = 0;
+      }
+
+      renderRow();
+    }
+
+    function handleKey(key) {
+      if (gameOver || busy) return;
+
+      if (key === 'enter') {
+        submit();
+      } else if (key === 'backspace') {
+        if (current[cursor]) current[cursor] = "";
+        else if (cursor > 0) { cursor--; current[cursor] = ""; }
+        renderRow();
+      } else {
+        current[cursor] = key;
+        const tile = tilesOf(row)[cursor];
+        if (cursor < COLS - 1) cursor++;
+        renderRow();
+        popTile(tile);
+      }
+    }
+
+    // ---------- input ----------
+    document.getElementById('keyboard').addEventListener('pointerdown', e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      e.preventDefault();
+      if (btn.classList.contains('off')) return;
+      btn.classList.add('pressed');
+      setTimeout(() => btn.classList.remove('pressed'), 80);
+      handleKey(btn.dataset.key);
+    });
+
+    board.addEventListener('pointerdown', e => {
+      const tile = e.target.closest('.tile');
+      if (!tile) return;
+      if (tile.classList.contains('done')) {
+        cycleMark(tile.textContent);
+        popTile(tile);
+        return;
+      }
+      if (gameOver || busy) return;
+      if (tile.parentElement !== rows[row]) return;
+      cursor = tilesOf(row).indexOf(tile);
+      renderRow();
+    });
+
+    // ---------- start ----------
+    renderRow();
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('SW registered'))
+        .catch(err => console.error('SW failed:', err));
+    }
+  </script>
+</body>
+</html>
