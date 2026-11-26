@@ -64,24 +64,6 @@
 
     h1 span { color: var(--yellow); }
 
-    #hard-btn {
-      justify-self: start;
-      padding: 6px 12px;
-      border: 2px solid var(--border);
-      border-radius: 16px;
-      background: transparent;
-      color: var(--text);
-      font-size: 0.75rem;
-      font-weight: bold;
-      letter-spacing: 0.05em;
-      cursor: pointer;
-    }
-
-    #hard-btn.active {
-      border-color: var(--yellow);
-      color: var(--yellow);
-    }
-
     #restart-btn {
       justify-self: end;
       width: 40px;
@@ -193,6 +175,21 @@
       100% { transform: translateY(0); }
     }
 
+    #clear-btn {
+      justify-self: start;
+      padding: 5px 14px;
+      border: none;
+      border-radius: 14px;
+      background: var(--yellow);
+      color: var(--bg);
+      font-size: 0.7rem;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+    }
+
+    #clear-btn.pressed { transform: scale(0.92); }
+
     /* ---------- keyboard ---------- */
     #keyboard {
       padding: 8px 6px 36px;
@@ -269,11 +266,83 @@
     }
 
     #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    /* ---------- end popup ---------- */
+    #end-popup {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      background: rgba(10, 10, 16, 0.55);
+      z-index: 20;
+    }
+
+    #end-popup.show { display: flex; }
+
+    #end-popup .sheet {
+      width: 100%;
+      max-width: 480px;
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      padding: 22px 20px calc(28px + env(safe-area-inset-bottom));
+      text-align: center;
+      animation: sheet-in 0.3s ease-out;
+    }
+
+    @keyframes sheet-in {
+      0%   { transform: translateY(100%); }
+      100% { transform: translateY(0); }
+    }
+
+    #end-title {
+      font-size: 0.85rem;
+      font-weight: bold;
+      letter-spacing: 0.12em;
+      color: var(--dim);
+      margin-bottom: 14px;
+    }
+
+    #end-word {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 22px;
+    }
+
+    #end-word div {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      color: var(--bg);
+      animation: count-in 0.3s ease-out both;
+    }
+
+    #end-word.won div  { background: var(--green); }
+    #end-word.lost div { background: var(--red); }
+
+    #end-btn {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 24px;
+      background: var(--yellow);
+      color: var(--bg);
+      font-size: 0.9rem;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <header>
-    <button id="hard-btn" type="button">HARD</button>
+    <button id="clear-btn" type="button">CLEAR</button>
     <h1>WORD<span>500</span></h1>
     <button id="restart-btn" type="button" aria-label="New game">
       <svg viewBox="0 0 24 24">
@@ -304,6 +373,14 @@
     </div>
   </div>
 
+  <div id="end-popup">
+    <div class="sheet">
+      <div id="end-title"></div>
+      <div id="end-word"></div>
+      <button id="end-btn" type="button">PLAY AGAIN</button>
+    </div>
+  </div>
+
   <script src="words.js"></script>
   <script>
     // ---------- constants & elements ----------
@@ -320,6 +397,8 @@
       for (let i = 0; i < COLS; i++) {
         const t = document.createElement('div');
         t.className = 'tile';
+        t.dataset.row = r;
+        t.dataset.col = i;
         row.appendChild(t);
       }
       row.appendChild(document.createElement('div'));
@@ -336,17 +415,74 @@
 
     const rows = board.children;
     const toast = document.getElementById('toast');
+    const endPopup = document.getElementById('end-popup');
+    const endWord = document.getElementById('end-word');
+    const STORAGE_KEY = 'word500-save';
 
     // ---------- state ----------
-    let answer = ANSWERS[Math.floor(Math.random() * ANSWERS.length)];
-    let guesses = [];
-    let marks = {};          // letter -> 'red' | 'yellow' | 'green'
-    let row = 0;
-    let current = ["", "", "", "", ""];
-    let cursor = 0;
-    let gameOver = false;
-    let busy = false;
+    let answer, guesses, marks, row, current, cursor, gameOver, busy;
+    let gameId = 0;          // changes on every new game, cancels old timers
     let toastTimer;
+
+    // ---------- storage ----------
+    function readSave() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY));
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function save() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          answer,
+          guesses: guesses.map(g => g.word),
+          current,
+          cursor,
+          gameOver,
+          marks
+        }));
+      } catch (e) {
+        // storage blocked or full: the game still works, it just won't be saved
+      }
+    }
+
+    function validMarks(m) {
+      return Array.isArray(m) && m.length === ROWS && m.every(r =>
+        Array.isArray(r) && r.length === COLS &&
+        r.every(v => v === null || v === 'red' || v === 'yellow' || v === 'green'));
+    }
+
+    function loadGame(s) {
+      if (!s || s.gameOver) return false;
+      if (!ANSWERS.includes(s.answer)) return false;
+      if (!Array.isArray(s.guesses) || s.guesses.length >= ROWS) return false;
+      if (!s.guesses.every(w => typeof w === 'string' && VALID_GUESSES.has(w))) return false;
+      if (s.guesses.includes(s.answer)) return false;
+
+      newGame(s.answer);
+      s.guesses.forEach(word => {
+        const result = score(word);
+        guesses.push({ word, result });
+        tilesOf(row).forEach((t, i) => {
+          t.textContent = word[i];
+          t.classList.add('filled', 'done');
+        });
+        showCounts(row, result, false);
+        row++;
+      });
+
+      marks = validMarks(s.marks) ? s.marks : emptyMarks();
+      current = Array.isArray(s.current) && s.current.length === COLS &&
+        s.current.every(c => typeof c === 'string' && /^[a-z]?$/.test(c) && !BLOCKED.includes(c))
+        ? s.current : ["", "", "", "", ""];
+      cursor = Number.isInteger(s.cursor) && s.cursor >= 0 && s.cursor < COLS ? s.cursor : 0;
+
+      renderMarks();
+      renderRow();
+      return true;
+    }
 
     // ---------- helpers ----------
     function tilesOf(r) {
@@ -392,12 +528,12 @@
     }
 
     // ---------- scoring ----------
-    function score(guess) {
+    function score(guess, target = answer) {
       let green = 0, common = 0;
       const left = {};
-      for (const l of answer) left[l] = (left[l] || 0) + 1;
+      for (const l of target) left[l] = (left[l] || 0) + 1;
       for (let i = 0; i < COLS; i++) {
-        if (guess[i] === answer[i]) green++;
+        if (guess[i] === target[i]) green++;
         if (left[guess[i]] > 0) { common++; left[guess[i]]--; }
       }
       return [green, common - green, COLS - common];
@@ -412,30 +548,111 @@
     }
 
     // ---------- marking ----------
-    const MARK_CYCLE = [undefined, 'red', 'yellow', 'green'];
+    // marks[row][col] = null | 'red' | 'yellow' | 'green', one tile at a time.
+    // Auto (locked, kept by CLEAR): a guess with 5 reds shows its tiles red,
+    // a guess with 5 yellows shows its tiles yellow.
     const MARK_CLASSES = ['m-red', 'm-yellow', 'm-green'];
+    const MARK_CYCLE = [null, 'red', 'yellow', 'green'];
+
+    function emptyMarks() {
+      return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    }
+
+    function autoMark(r) {
+      const res = guesses[r].result;
+      if (res[2] === COLS) return 'red';
+      if (res[1] === COLS) return 'yellow';
+      return null;
+    }
+
+    function tileMark(r, c) {
+      return autoMark(r) || marks[r][c];
+    }
+
+    function keyMark(l) {
+      const found = new Set();
+      guesses.forEach((g, r) => {
+        for (let c = 0; c < COLS; c++) {
+          if (g.word[c] === l) found.add(tileMark(r, c));
+        }
+      });
+      return ['green', 'yellow', 'red'].find(m => found.has(m)) || null;
+    }
 
     function renderMarks() {
       document.querySelectorAll('.tile.done').forEach(t => {
         t.classList.remove(...MARK_CLASSES);
-        const m = marks[t.textContent];
+        const m = tileMark(+t.dataset.row, +t.dataset.col);
         if (m) t.classList.add('m-' + m);
       });
       document.querySelectorAll('#keyboard button').forEach(b => {
         b.classList.remove(...MARK_CLASSES);
-        const m = marks[b.dataset.key];
+        const m = keyMark(b.dataset.key);
         if (m) b.classList.add('m-' + m);
       });
     }
 
-    function cycleMark(letter) {
-      const next = MARK_CYCLE[(MARK_CYCLE.indexOf(marks[letter]) + 1) % MARK_CYCLE.length];
-      if (next) marks[letter] = next;
-      else delete marks[letter];
+    function cycleMark(r, c) {
+      if (autoMark(r)) return false;
+      marks[r][c] = MARK_CYCLE[(MARK_CYCLE.indexOf(marks[r][c]) + 1) % MARK_CYCLE.length];
       renderMarks();
+      save();
+      return true;
+    }
+
+    function clearMarks() {
+      marks = emptyMarks();
+      renderMarks();
+      save();
     }
 
     // ---------- game flow ----------
+    function newGame(fixedAnswer) {
+      gameId++;
+      answer = fixedAnswer || ANSWERS[Math.floor(Math.random() * ANSWERS.length)];
+      guesses = [];
+      marks = emptyMarks();
+      row = 0;
+      current = ["", "", "", "", ""];
+      cursor = 0;
+      gameOver = false;
+      busy = false;
+
+      [...rows].forEach((r, ri) => {
+        r.classList.remove('lock', 'shake');
+        tilesOf(ri).forEach(t => {
+          t.textContent = "";
+          t.className = 'tile';
+          t.style.animationDelay = "";
+        });
+      });
+      document.querySelectorAll('.count').forEach(c => {
+        c.textContent = "";
+        c.classList.remove('shown');
+        c.style.animationDelay = "";
+      });
+      endPopup.classList.remove('show');
+
+      renderMarks();
+      renderRow();
+      if (fixedAnswer) return;
+      save();
+    }
+
+    function showEnd(won) {
+      document.getElementById('end-title').textContent =
+        won ? `SOLVED IN ${guesses.length}/${ROWS}` : 'OUT OF GUESSES';
+      endWord.className = won ? 'won' : 'lost';
+      endWord.innerHTML = "";
+      [...answer].forEach((l, i) => {
+        const d = document.createElement('div');
+        d.textContent = l;
+        d.style.animationDelay = (200 + i * 80) + 'ms';
+        endWord.appendChild(d);
+      });
+      endPopup.classList.add('show');
+    }
+
     function submit() {
       if (current.some(c => !c)) {
         shakeRow();
@@ -462,16 +679,20 @@
       showCounts(row, result, true);
       renderMarks();
 
+      const id = gameId;
       busy = true;
       setTimeout(() => {
+        if (id !== gameId) return;
         r.classList.remove('lock');
         busy = false;
       }, REVEAL_END);
 
       if (guess === answer || row === ROWS - 1) {
         gameOver = true;
-        // end popup follows in step 6
-        setTimeout(() => showToast(answer.toUpperCase()), REVEAL_END);
+        const won = guess === answer;
+        setTimeout(() => {
+          if (id === gameId) showEnd(won);
+        }, REVEAL_END + 200);
       } else {
         row++;
         current = ["", "", "", "", ""];
@@ -479,6 +700,7 @@
       }
 
       renderRow();
+      save();
     }
 
     function handleKey(key) {
@@ -490,11 +712,13 @@
         if (current[cursor]) current[cursor] = "";
         else if (cursor > 0) { cursor--; current[cursor] = ""; }
         renderRow();
+        save();
       } else {
         current[cursor] = key;
         const tile = tilesOf(row)[cursor];
         if (cursor < COLS - 1) cursor++;
         renderRow();
+        save();
         popTile(tile);
       }
     }
@@ -514,18 +738,29 @@
       const tile = e.target.closest('.tile');
       if (!tile) return;
       if (tile.classList.contains('done')) {
-        cycleMark(tile.textContent);
-        popTile(tile);
+        if (cycleMark(+tile.dataset.row, +tile.dataset.col)) popTile(tile);
         return;
       }
       if (gameOver || busy) return;
       if (tile.parentElement !== rows[row]) return;
       cursor = tilesOf(row).indexOf(tile);
       renderRow();
+      save();
+    });
+
+    document.getElementById('restart-btn').addEventListener('click', () => newGame());
+    document.getElementById('end-btn').addEventListener('click', () => newGame());
+
+    const clearBtn = document.getElementById('clear-btn');
+    clearBtn.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      clearBtn.classList.add('pressed');
+      setTimeout(() => clearBtn.classList.remove('pressed'), 80);
+      clearMarks();
     });
 
     // ---------- start ----------
-    renderRow();
+    if (!loadGame(readSave())) newGame();
   </script>
   <script>
     if ('serviceWorker' in navigator) {
