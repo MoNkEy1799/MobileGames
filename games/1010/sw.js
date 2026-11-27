@@ -1,4 +1,4 @@
-const CACHE_NAME = "1010-v8";
+const CACHE_NAME = "1010-v9";
 const CACHE_ASSETS = [
     "/",
     "/index.html",
