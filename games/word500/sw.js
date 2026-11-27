@@ -1,4 +1,4 @@
-const CACHE_NAME = 'word500-v1';
+const CACHE_NAME = 'word500-v2';
 const FILES = [
   '/',
   '/index.html',

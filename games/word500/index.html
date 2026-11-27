@@ -639,7 +639,18 @@
       save();
     }
 
+    function revealMarks() {
+      guesses.forEach((g, r) => {
+        for (let c = 0; c < COLS; c++) {
+          const l = g.word[c];
+          marks[r][c] = l === answer[c] ? 'green' : answer.includes(l) ? 'yellow' : 'red';
+        }
+      });
+      renderMarks();
+    }
+
     function showEnd(won) {
+      revealMarks();
       document.getElementById('end-title').textContent =
         won ? `SOLVED IN ${guesses.length}/${ROWS}` : 'OUT OF GUESSES';
       endWord.className = won ? 'won' : 'lost';
