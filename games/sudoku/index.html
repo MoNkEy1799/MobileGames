@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#15171a">
+  <title>Sudoku</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="img/icon-192.png">
+  <style>
+    :root {
+      --bg: #15171a;
+      --surface: #1f2226;
+      --line-thin: #33373d;
+      --line-thick: #7f8690;
+      --text: #eceef1;
+      --muted: #8a9098;
+      --key: #292d33;
+      --key-text: #eceef1;
+      --user: #a9c4e8;
+      --selected: #303846;
+      --peer: #25282d;
+      --same: #2b3950;
+      --note-hl: #c0d4f0;
+      --conflict: #ff7a7a;
+      --conflict-bg: #382528;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    #app {
+      height: 100dvh;
+      max-width: 520px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      padding:
+        calc(env(safe-area-inset-top) + 8px)
+        calc(env(safe-area-inset-right) + 12px)
+        calc(env(safe-area-inset-bottom) + 16px)
+        calc(env(safe-area-inset-left) + 12px);
+      gap: 12px;
+    }
+
+    /* Header */
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      height: 52px;
+      flex-shrink: 0;
+    }
+
+    .header-left {
+      justify-self: start;
+    }
+
+    .header-right {
+      justify-self: end;
+      display: flex;
+      gap: 8px;
+    }
+
+    .header-center {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    #difficulty {
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    #timer {
+      font-size: 15px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: 12px;
+      background: var(--key);
+      color: var(--key-text);
+      display: grid;
+      place-items: center;
+    }
+
+    .icon-btn svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    #menu-btn {
+      background: transparent;
+    }
+
+    /* Board */
+    #board-wrap {
+      flex: 1;
+      min-height: 0;
+      container-type: size;
+      display: grid;
+      place-items: center;
+    }
+
+    #board {
+      width: min(100cqw, 100cqh);
+      aspect-ratio: 1;
+      container-type: inline-size;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 2px;
+      padding: 2px;
+      background: var(--line-thick);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .box {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--line-thin);
+    }
+
+    .cell {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      background: var(--surface);
+      display: grid;
+      place-items: center;
+      font-size: calc(100cqw / 9 * 0.6);
+      line-height: 1;
+    }
+
+    .value {
+      display: inline-block;
+    }
+
+    .value.pop {
+      animation: pop 220ms ease-out;
+    }
+
+    /* Overshoot: grows past full size, then settles. */
+    @keyframes pop {
+      0% {
+        transform: scale(0.6);
+      }
+      55% {
+        transform: scale(1.3);
+      }
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    .notes {
+      position: absolute;
+      inset: 4%;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      font-size: calc(100cqw / 27 * 0.62);
+      color: var(--muted);
+    }
+
+    .notes span {
+      display: grid;
+      place-items: center;
+    }
+
+    .cell.given {
+      font-weight: 600;
+    }
+
+    .cell.user {
+      color: var(--user);
+    }
+
+    .cell.peer {
+      background: var(--peer);
+    }
+
+    .cell.same {
+      background: var(--same);
+    }
+
+    .cell.conflict {
+      background: var(--conflict-bg);
+    }
+
+    .cell.selected {
+      background: var(--selected);
+    }
+
+    .cell.wrong {
+      color: var(--conflict);
+    }
+
+    .notes span.hl {
+      color: var(--note-hl);
+      font-weight: 700;
+    }
+
+    /* Number pad */
+    #pad {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .key {
+      position: relative;
+      height: clamp(52px, 8.5dvh, 72px);
+      border: none;
+      border-radius: 12px;
+      background: var(--key);
+      color: var(--key-text);
+      font-size: 26px;
+      font-family: inherit;
+      display: grid;
+      place-items: center;
+    }
+
+    .key .count {
+      position: absolute;
+      top: 5px;
+      right: 7px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .key svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .key.active {
+      background: var(--user);
+      color: var(--bg);
+    }
+
+    .key.locked {
+      color: var(--user);
+      box-shadow: inset 0 0 0 2px var(--user);
+    }
+
+    .key.done {
+      opacity: 0.35;
+    }
+
+    /* Menu */
+    #menu {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.55);
+    }
+
+    #menu.open {
+      display: flex;
+    }
+
+    .menu-panel {
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border-radius: 18px;
+      padding: 4px 18px 18px;
+    }
+
+    .tabs {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 1fr;
+      gap: 4px;
+      padding: 4px;
+      margin: 14px 0 18px;
+      background: var(--bg);
+      border-radius: 12px;
+    }
+
+    .tab {
+      height: 40px;
+      border: none;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 15px;
+      font-family: inherit;
+    }
+
+    .tab.active {
+      background: var(--key);
+      color: var(--key-text);
+    }
+
+    .tabs.small {
+      margin-top: 0;
+    }
+
+    .tabs.small .tab {
+      height: 34px;
+      font-size: 13px;
+    }
+
+    /* Both pages share one grid cell, so the panel keeps the taller page's height. */
+    .tab-pages {
+      display: grid;
+    }
+
+    .tab-page {
+      grid-area: 1 / 1;
+      visibility: hidden;
+    }
+
+    .tab-page.active {
+      visibility: visible;
+    }
+
+    #level-buttons {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .level-btn {
+      height: 56px;
+      border: none;
+      border-radius: 12px;
+      background: var(--key);
+      color: var(--key-text);
+      font-size: 17px;
+      font-family: inherit;
+    }
+
+    #autonotes-btn {
+      display: block;
+      width: auto;
+      height: 34px;
+      margin-top: 16px;
+      padding: 0 12px;
+      border-radius: 9px;
+      font-size: 13px;
+      background: transparent;
+      box-shadow: inset 0 0 0 1px var(--line-thin);
+      color: var(--muted);
+    }
+
+    .level-btn.current {
+      box-shadow: inset 0 0 0 2px var(--user);
+    }
+
+    /* Win */
+    #board.win .cell {
+      animation: win-wave 500ms ease-in-out both;
+    }
+
+    @keyframes win-wave {
+      50% {
+        background: var(--same);
+        transform: scale(0.88);
+      }
+    }
+
+    #summary {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.55);
+    }
+
+    #summary.open {
+      display: flex;
+    }
+
+    .summary-panel {
+      width: 100%;
+      max-width: 340px;
+      background: var(--surface);
+      border-radius: 18px;
+      padding: 26px 18px 18px;
+      text-align: center;
+    }
+
+    .summary-title {
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    #summary-level {
+      margin-top: 4px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    #summary-time {
+      margin-top: 18px;
+      font-size: 44px;
+      font-weight: 300;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #summary-best {
+      visibility: hidden;
+      margin-top: 6px;
+      font-size: 15px;
+      color: var(--user);
+    }
+
+    #summary-best.show {
+      visibility: visible;
+    }
+
+    #summary-new {
+      width: 100%;
+      margin-top: 22px;
+    }
+
+    #stats {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 16px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #stats td {
+      padding: 14px 2px;
+      border-top: 1px solid var(--line-thin);
+      vertical-align: top;
+    }
+
+    #stats tr:first-child td {
+      border-top: none;
+    }
+
+    #stats td:first-child {
+      color: var(--muted);
+    }
+
+    #stats td:last-child {
+      text-align: right;
+    }
+
+    #stats .date {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="header-left">
+        <button class="icon-btn" id="menu-btn" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+      <div class="header-center">
+        <span id="difficulty">Easy</span>
+        <span id="timer">0:00</span>
+      </div>
+      <div class="header-right">
+        <button class="icon-btn" id="undo-btn" aria-label="Undo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        </button>
+        <button class="icon-btn" id="redo-btn" aria-label="Redo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="board-wrap">
+      <div id="board"></div>
+    </div>
+
+    <div id="pad"></div>
+  </div>
+
+  <div id="menu">
+    <div class="menu-panel">
+      <div class="tabs" id="menu-tabs">
+        <button class="tab" data-tab="new">Game</button>
+        <button class="tab" data-tab="stats">Stats</button>
+      </div>
+
+      <div class="tab-pages">
+        <div class="tab-page" id="tab-new">
+          <div id="level-buttons"></div>
+          <button class="level-btn" id="autonotes-btn">Auto-fill notes</button>
+        </div>
+
+        <div class="tab-page" id="tab-stats">
+          <div class="tabs small" id="stats-levels"></div>
+          <table id="stats">
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="summary">
+    <div class="summary-panel">
+      <div class="summary-title">Solved</div>
+      <div id="summary-level"></div>
+      <div id="summary-time"></div>
+      <div id="summary-best">New best time!</div>
+      <button class="level-btn" id="summary-new">New game</button>
+    </div>
+  </div>
+
+  <script src="puzzles.js"></script>
+  <script>
+    'use strict';
+
+    // ---------- Geometry ----------
+    const ROW = [], COL = [], BOX = [];
+    for (let i = 0; i < 81; i++) {
+      ROW[i] = Math.floor(i / 9);
+      COL[i] = i % 9;
+      BOX[i] = Math.floor(ROW[i] / 3) * 3 + Math.floor(COL[i] / 3);
+    }
+    const PEERS = [];
+    for (let i = 0; i < 81; i++) {
+      PEERS[i] = [];
+      for (let j = 0; j < 81; j++) {
+        if (j !== i && (ROW[i] === ROW[j] || COL[i] === COL[j] || BOX[i] === BOX[j])) PEERS[i].push(j);
+      }
+    }
+
+    // ---------- Helpers ----------
+    function randInt(n) {
+      return Math.floor(Math.random() * n);
+    }
+
+    function shuffled(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = randInt(i + 1);
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    // Returns an order of 9 lines: bands/stacks shuffled, lines within each shuffled.
+    function lineOrder() {
+      const order = [];
+      for (const group of shuffled([0, 1, 2])) {
+        for (const k of shuffled([0, 1, 2])) order.push(group * 3 + k);
+      }
+      return order;
+    }
+
+    // Turns a stored puzzle into a random equivalent one.
+    function shufflePuzzle(p) {
+      const digits = shuffled([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      const rows = lineOrder();
+      const cols = lineOrder();
+      const transpose = Math.random() < 0.5;
+      let out = '';
+      for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          let sr = rows[r], sc = cols[c];
+          if (transpose) [sr, sc] = [sc, sr];
+          const ch = p[sr * 9 + sc];
+          out += ch === '0' ? '0' : String(digits[Number(ch) - 1]);
+        }
+      }
+      return out;
+    }
+
+    // ---------- State ----------
+    const LEVELS = ['easy', 'medium', 'hard', 'expert'];
+    const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard', expert: 'Expert' };
+
+    let state = null;
+    let selected = -1;
+    let notesMode = false;
+    let lockedDigit = 0; // 0 = no digit locked
+
+    function newGame(level) {
+      const list = PUZZLES[level];
+      const givens = shufflePuzzle(list[randInt(list.length)]);
+      state = {
+        level,
+        givens,
+        values: [...givens].map(Number),
+        notes: new Array(81).fill(0), // bitmask per cell: bit d-1 = note d
+        history: [],
+        future: [], // undone moves, for redo
+        elapsed: 0, // ms played, excluding the running segment
+        won: false,
+        result: null, // after a win: { ms, newBest }
+        timerStarted: false, // set by the first number or note
+        counted: false, // counted as started in the stats, set by the first number
+      };
+      selected = -1;
+      setLock(0);
+      hideSummary();
+      runStart = null;
+      resumeTimer();
+      renderAll();
+      saveGame();
+    }
+
+    // ---------- Stats ----------
+    // Per level: { started, won, totalMs (sum of won times), best: { ms, date } | null }
+    const STATS_KEY = 'sudoku-stats';
+
+    function emptyLevelStats() {
+      return { started: 0, won: 0, totalMs: 0, best: null };
+    }
+
+    function loadStats() {
+      let s = null;
+      try {
+        s = JSON.parse(localStorage.getItem(STATS_KEY));
+      } catch (e) {
+        s = null;
+      }
+      const out = {};
+      for (const lv of LEVELS) {
+        const x = s && typeof s === 'object' ? s[lv] : null;
+        const ok = x && typeof x === 'object' &&
+          Number.isInteger(x.started) && x.started >= 0 &&
+          Number.isInteger(x.won) && x.won >= 0 && x.won <= x.started &&
+          typeof x.totalMs === 'number' && Number.isFinite(x.totalMs) && x.totalMs >= 0 &&
+          (x.best === null || (x.best && typeof x.best === 'object' &&
+            typeof x.best.ms === 'number' && Number.isFinite(x.best.ms) && x.best.ms > 0 &&
+            typeof x.best.date === 'string' && !Number.isNaN(Date.parse(x.best.date))));
+        out[lv] = ok
+          ? { started: x.started, won: x.won, totalMs: x.totalMs, best: x.best ? { ms: x.best.ms, date: x.best.date } : null }
+          : emptyLevelStats();
+      }
+      return out;
+    }
+
+    function saveStats() {
+      try {
+        localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+      } catch (e) {
+        // Ignore storage errors.
+      }
+    }
+
+    const stats = loadStats();
+
+    // ---------- Saving ----------
+    const SAVE_KEY = 'sudoku-game';
+
+    function saveGame() {
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify({ ...state, elapsed: elapsedMs() }));
+      } catch (e) {
+        // Storage full or unavailable: keep playing without saving.
+      }
+    }
+
+    const isInt = (x, min, max) => Number.isInteger(x) && x >= min && x <= max;
+
+    function validMove(m, givens) {
+      if (!Array.isArray(m) || m.length !== 6) return false;
+      const [i, oldV, oldN, newV, newN, peers] = m;
+      if (!isInt(i, 0, 80) || givens[i] !== '0') return false;
+      if (!isInt(oldV, 0, 9) || !isInt(newV, 0, 9) || !isInt(oldN, 0, 511) || !isInt(newN, 0, 511)) return false;
+      if (!Array.isArray(peers)) return false;
+      return peers.every(pr => Array.isArray(pr) && pr.length === 3 && isInt(pr[0], 0, 80) &&
+        givens[pr[0]] === '0' && isInt(pr[1], 0, 511) && isInt(pr[2], 0, 511));
+    }
+
+    // Returns the saved state, or null if missing or invalid.
+    function loadGame() {
+      let s;
+      try {
+        s = JSON.parse(localStorage.getItem(SAVE_KEY));
+      } catch (e) {
+        return null;
+      }
+      if (!s || typeof s !== 'object') return null;
+      if (!LEVELS.includes(s.level)) return null;
+      if (typeof s.givens !== 'string' || !/^[0-9]{81}$/.test(s.givens)) return null;
+      if (!Array.isArray(s.values) || s.values.length !== 81) return null;
+      if (!Array.isArray(s.notes) || s.notes.length !== 81) return null;
+      for (let i = 0; i < 81; i++) {
+        if (!isInt(s.values[i], 0, 9) || !isInt(s.notes[i], 0, 511)) return null;
+        if (s.givens[i] !== '0' && s.values[i] !== Number(s.givens[i])) return null;
+      }
+      if (!Array.isArray(s.history) || !Array.isArray(s.future)) return null;
+      if (!s.history.every(m => validMove(m, s.givens)) || !s.future.every(m => validMove(m, s.givens))) return null;
+      if (typeof s.elapsed !== 'number' || !Number.isFinite(s.elapsed) || s.elapsed < 0) return null;
+      const won = s.won === true;
+      // Older saves without these flags: treat a game with moves as started.
+      const timerStarted = typeof s.timerStarted === 'boolean' ? s.timerStarted : s.history.length > 0;
+      const counted = typeof s.counted === 'boolean' ? s.counted : s.history.length > 0;
+      if (won && !(s.result && typeof s.result === 'object' &&
+        typeof s.result.ms === 'number' && Number.isFinite(s.result.ms) && s.result.ms >= 0 &&
+        typeof s.result.newBest === 'boolean')) return null;
+      return {
+        level: s.level,
+        givens: s.givens,
+        values: s.values,
+        notes: s.notes,
+        history: s.history,
+        future: s.future,
+        elapsed: s.elapsed,
+        won,
+        result: won ? { ms: s.result.ms, newBest: s.result.newBest } : null,
+        timerStarted,
+        counted,
+      };
+    }
+
+    function startUp() {
+      const saved = loadGame();
+      if (!saved) {
+        newGame('easy');
+        return;
+      }
+      state = saved;
+      selected = -1;
+      runStart = null;
+      resumeTimer();
+      renderAll();
+      if (state.won) showSummary();
+    }
+
+    // ---------- Timer ----------
+    let runStart = null; // Date.now() when the current running segment began
+
+    function elapsedMs() {
+      return state.elapsed + (runStart !== null ? Date.now() - runStart : 0);
+    }
+
+    function pauseTimer() {
+      if (runStart === null) return;
+      state.elapsed += Date.now() - runStart;
+      runStart = null;
+    }
+
+    function resumeTimer() {
+      if (runStart === null && !document.hidden && !state.won && state.timerStarted) runStart = Date.now();
+    }
+
+    function formatTime(ms) {
+      const s = Math.floor(ms / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor(s / 60) % 60;
+      const ss = String(s % 60).padStart(2, '0');
+      return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+    }
+
+    let shownTime = '';
+    function renderTimer() {
+      const t = formatTime(elapsedMs());
+      if (t !== shownTime) {
+        shownTime = t;
+        timerEl.textContent = t;
+      }
+    }
+
+    setInterval(renderTimer, 250);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        pauseTimer();
+        saveGame();
+      } else {
+        resumeTimer();
+      }
+      renderTimer();
+    });
+
+    window.addEventListener('pagehide', saveGame);
+
+    function isGiven(i) {
+      return state.givens[i] !== '0';
+    }
+
+    // ---------- DOM ----------
+    const boardEl = document.getElementById('board');
+    const padEl = document.getElementById('pad');
+    const difficultyEl = document.getElementById('difficulty');
+    const timerEl = document.getElementById('timer');
+    const cells = [];
+    const keys = [];
+
+    for (let b = 0; b < 9; b++) {
+      const box = document.createElement('div');
+      box.className = 'box';
+      for (let k = 0; k < 9; k++) {
+        const r = Math.floor(b / 3) * 3 + Math.floor(k / 3);
+        const c = (b % 3) * 3 + (k % 3);
+        const i = r * 9 + c;
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.i = i;
+        cell.innerHTML = '<span class="value"></span><div class="notes">' + '<span></span>'.repeat(9) + '</div>';
+        cells[i] = cell;
+        box.appendChild(cell);
+      }
+      boardEl.appendChild(box);
+    }
+
+    for (let d = 1; d <= 9; d++) {
+      const key = document.createElement('button');
+      key.className = 'key';
+      key.dataset.d = d;
+      key.innerHTML = `${d}<span class="count"></span>`;
+      keys[d] = key;
+      padEl.appendChild(key);
+    }
+    const notesKey = document.createElement('button');
+    notesKey.className = 'key';
+    notesKey.id = 'notes-btn';
+    notesKey.setAttribute('aria-label', 'Notes');
+    notesKey.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>';
+    padEl.appendChild(notesKey);
+
+    // ---------- Rendering ----------
+    // Cells whose number clashes with a peer.
+    function findConflicts() {
+      const bad = new Array(81).fill(false);
+      for (let i = 0; i < 81; i++) {
+        const v = state.values[i];
+        if (!v) continue;
+        for (const p of PEERS[i]) {
+          if (state.values[p] === v) {
+            bad[i] = true;
+            break;
+          }
+        }
+      }
+      return bad;
+    }
+
+    function render() {
+      const conflicts = findConflicts();
+      // Digit to highlight: the locked digit, or the number in the selected cell.
+      const hd = lockedDigit || (selected >= 0 ? state.values[selected] : 0);
+      const hbit = hd ? 1 << (hd - 1) : 0;
+      for (let i = 0; i < 81; i++) {
+        const cell = cells[i];
+        const v = state.values[i];
+        const m = v ? 0 : state.notes[i];
+        const given = isGiven(i);
+        cell.firstChild.textContent = v ? v : '';
+        const noteSpans = cell.lastChild.children;
+        for (let d = 0; d < 9; d++) {
+          const bit = 1 << d;
+          noteSpans[d].textContent = m & bit ? d + 1 : '';
+          noteSpans[d].classList.toggle('hl', bit === hbit && (m & bit) !== 0);
+        }
+        const peer = selected >= 0 && i !== selected &&
+          (ROW[i] === ROW[selected] || COL[i] === COL[selected] || BOX[i] === BOX[selected]);
+        cell.classList.toggle('given', given);
+        cell.classList.toggle('user', !given && v > 0);
+        cell.classList.toggle('selected', i === selected);
+        cell.classList.toggle('peer', peer);
+        cell.classList.toggle('same', hd > 0 && v === hd);
+        cell.classList.toggle('conflict', conflicts[i] && given);
+        cell.classList.toggle('wrong', conflicts[i] && !given);
+      }
+      const counts = new Array(10).fill(0);
+      for (const v of state.values) counts[v]++;
+      for (let d = 1; d <= 9; d++) {
+        keys[d].querySelector('.count').textContent = Math.max(0, 9 - counts[d]);
+        keys[d].classList.toggle('done', counts[d] >= 9);
+      }
+    }
+
+    function renderAll() {
+      difficultyEl.textContent = LEVEL_NAMES[state.level];
+      render();
+      renderTimer();
+    }
+
+    // ---------- Input ----------
+    function select(i) {
+      selected = i;
+      render();
+    }
+
+    // A move: [cell, oldValue, oldNotes, newValue, newNotes, [[peer, oldNotes, newNotes], ...]]
+    function applyMove(move, forward) {
+      const [i, oldV, oldN, newV, newN, peers] = move;
+      state.values[i] = forward ? newV : oldV;
+      state.notes[i] = forward ? newN : oldN;
+      for (const [p, o, n] of peers) state.notes[p] = forward ? n : o;
+    }
+
+    function enterDigit(d, i = selected) {
+      if (state.won || i < 0 || isGiven(i)) return;
+      const bit = 1 << (d - 1);
+      const oldV = state.values[i];
+      const oldN = state.notes[i];
+      let newV = oldV;
+      let newN = oldN;
+      const peers = [];
+      if (notesMode) {
+        if (oldV) return;
+        newN = oldN ^ bit;
+      } else if (oldV === d) {
+        newV = 0;
+      } else {
+        newV = d;
+        newN = 0;
+        for (const p of PEERS[i]) {
+          if (state.notes[p] & bit) peers.push([p, state.notes[p], state.notes[p] & ~bit]);
+        }
+      }
+      const move = [i, oldV, oldN, newV, newN, peers];
+      applyMove(move, true);
+      state.history.push(move);
+      state.future = [];
+      if (!state.timerStarted) {
+        state.timerStarted = true;
+        resumeTimer();
+      }
+      if (newV && !state.counted) {
+        state.counted = true;
+        stats[state.level].started++;
+        saveStats();
+      }
+      render();
+      if (newV && newV !== oldV) popValue(i);
+      saveGame();
+      checkWin();
+    }
+
+    // Short scale-in of a newly placed number.
+    function popValue(i) {
+      const el = cells[i].firstChild;
+      el.classList.remove('pop');
+      void el.offsetWidth; // restart the animation
+      el.classList.add('pop');
+    }
+
+    function undo() {
+      if (state.won) return;
+      const move = state.history.pop();
+      if (!move) return;
+      applyMove(move, false);
+      state.future.push(move);
+      render();
+      saveGame();
+      checkWin();
+    }
+
+    function redo() {
+      if (state.won) return;
+      const move = state.future.pop();
+      if (!move) return;
+      applyMove(move, true);
+      state.history.push(move);
+      render();
+      saveGame();
+      checkWin();
+    }
+
+    // ---------- Win ----------
+    const WIN_ANIM_MS = 1300;
+
+    function checkWin() {
+      if (state.values.includes(0)) return;
+      if (findConflicts().includes(true)) return;
+      pauseTimer();
+      const ms = state.elapsed;
+      const s = stats[state.level];
+      const newBest = !s.best || ms < s.best.ms;
+      s.won++;
+      s.totalMs += ms;
+      if (newBest) s.best = { ms, date: new Date().toISOString() };
+      saveStats();
+      state.won = true;
+      state.result = { ms, newBest };
+      selected = -1;
+      setLock(0);
+      renderTimer();
+      saveGame();
+      playWinAnimation();
+      setTimeout(showSummary, WIN_ANIM_MS);
+    }
+
+    // Wave across the board from the top-left corner.
+    function playWinAnimation() {
+      for (let i = 0; i < 81; i++) {
+        cells[i].style.animationDelay = (ROW[i] + COL[i]) * 45 + 'ms';
+      }
+      boardEl.classList.remove('win');
+      void boardEl.offsetWidth; // restart the animation
+      boardEl.classList.add('win');
+    }
+
+    const summaryEl = document.getElementById('summary');
+
+    function showSummary() {
+      if (!state.won) return;
+      document.getElementById('summary-level').textContent = LEVEL_NAMES[state.level];
+      document.getElementById('summary-time').textContent = formatTime(state.result.ms);
+      document.getElementById('summary-best').classList.toggle('show', state.result.newBest);
+      summaryEl.classList.add('open');
+    }
+
+    function hideSummary() {
+      summaryEl.classList.remove('open');
+      boardEl.classList.remove('win');
+    }
+
+    document.getElementById('summary-new').addEventListener('click', () => newGame(state.level));
+
+    function toggleNotesMode() {
+      notesMode = !notesMode;
+      notesKey.classList.toggle('active', notesMode);
+    }
+
+    function setLock(d) {
+      lockedDigit = d;
+      for (let k = 1; k <= 9; k++) keys[k].classList.toggle('locked', k === d);
+      render();
+    }
+
+    // Cell tap: number mode applies the locked digit, otherwise selects the cell.
+    boardEl.addEventListener('pointerdown', e => {
+      const cell = e.target.closest('.cell');
+      if (!cell) return;
+      const i = Number(cell.dataset.i);
+      if (lockedDigit) enterDigit(lockedDigit, i);
+      else select(i);
+    });
+
+    // Digit key: cell mode enters it, otherwise locks/switches/releases the digit.
+    padEl.addEventListener('pointerdown', e => {
+      const key = e.target.closest('.key');
+      if (!key) return;
+      e.preventDefault();
+      if (key === notesKey) {
+        toggleNotesMode();
+        return;
+      }
+      const d = Number(key.dataset.d);
+      if (selected >= 0) enterDigit(d);
+      else setLock(d === lockedDigit ? 0 : d);
+    });
+
+    document.getElementById('undo-btn').addEventListener('pointerdown', e => {
+      e.preventDefault();
+      undo();
+    });
+
+    document.getElementById('redo-btn').addEventListener('pointerdown', e => {
+      e.preventDefault();
+      redo();
+    });
+
+    // Tap outside the board, pad and buttons: back to neutral.
+    document.addEventListener('pointerdown', e => {
+      if (e.target.closest('#board, #pad, #menu, #summary, button')) return;
+      select(-1);
+      setLock(0);
+    });
+
+    // ---------- Menu ----------
+    const menuEl = document.getElementById('menu');
+    const menuTabsEl = document.getElementById('menu-tabs');
+    const levelButtonsEl = document.getElementById('level-buttons');
+    const statsLevelsEl = document.getElementById('stats-levels');
+    const statsBody = document.querySelector('#stats tbody');
+    let statsLevel = 'easy';
+
+    for (const lv of LEVELS) {
+      const btn = document.createElement('button');
+      btn.className = 'level-btn';
+      btn.dataset.level = lv;
+      btn.textContent = LEVEL_NAMES[lv];
+      levelButtonsEl.appendChild(btn);
+
+      const tab = document.createElement('button');
+      tab.className = 'tab';
+      tab.dataset.level = lv;
+      tab.textContent = LEVEL_NAMES[lv];
+      statsLevelsEl.appendChild(tab);
+    }
+
+    function formatDate(iso) {
+      return new Date(iso).toLocaleDateString();
+    }
+
+    function showTab(name) {
+      for (const t of menuTabsEl.children) t.classList.toggle('active', t.dataset.tab === name);
+      document.getElementById('tab-new').classList.toggle('active', name === 'new');
+      document.getElementById('tab-stats').classList.toggle('active', name === 'stats');
+    }
+
+    function renderStats() {
+      for (const t of statsLevelsEl.children) t.classList.toggle('active', t.dataset.level === statsLevel);
+      const s = stats[statsLevel];
+      // The date line is always present so the panel height never changes.
+      const best = s.best
+        ? `${formatTime(s.best.ms)}<span class="date">${formatDate(s.best.date)}</span>`
+        : '–<span class="date">&nbsp;</span>';
+      const avg = s.won ? formatTime(s.totalMs / s.won) : '–';
+      statsBody.innerHTML =
+        `<tr><td>Started</td><td>${s.started}</td></tr>` +
+        `<tr><td>Won</td><td>${s.won}</td></tr>` +
+        `<tr><td>Best time</td><td>${best}</td></tr>` +
+        `<tr><td>Average time</td><td>${avg}</td></tr>`;
+    }
+
+    function renderMenu() {
+      for (const btn of levelButtonsEl.children) {
+        btn.classList.toggle('current', btn.dataset.level === state.level);
+      }
+      renderStats();
+    }
+
+    function openMenu() {
+      statsLevel = state.level;
+      showTab('new');
+      renderMenu();
+      menuEl.classList.add('open');
+    }
+
+    function closeMenu() {
+      menuEl.classList.remove('open');
+    }
+
+    document.getElementById('menu-btn').addEventListener('click', openMenu);
+    menuEl.addEventListener('click', e => {
+      if (e.target === menuEl) closeMenu();
+    });
+
+    menuTabsEl.addEventListener('click', e => {
+      const t = e.target.closest('.tab');
+      if (t) showTab(t.dataset.tab);
+    });
+
+    statsLevelsEl.addEventListener('click', e => {
+      const t = e.target.closest('.tab');
+      if (!t) return;
+      statsLevel = t.dataset.level;
+      renderStats();
+    });
+
+    levelButtonsEl.addEventListener('click', e => {
+      const btn = e.target.closest('.level-btn');
+      if (!btn) return;
+      newGame(btn.dataset.level);
+      closeMenu();
+    });
+
+    // ---------- Start ----------
+    startUp();
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+  </script>
+</body>
+</html>
